@@ -204,8 +204,23 @@
 - Declare data members private. It gives clients **syntactically uniform access to data**, affords **fine-grained access control**, allows **invariants** to be enforced, and offers class authors **implementation flexibility**. (if the data members are changed, an **_unknowably large amount of client code is broken_**.)
 - **protected** is no more encapsulated than **public**.
 
-### Item 23: Prefer non-member non-friend functions to member functions
+## Item 23: Prefer non-member non-friend **functions** to member functions
+
+- Prefer non-member non-friend functions to member functions. Doing so increases **encapsulation**, **packaging flexibility**, and **functional extensibility**.
+  ![](images/non-member_vs_member.png)
+
+  1. **Encapsulation**: A **member function** (which can access not only the private data of a class, but also private functions, enums, typedefs, etc.) and a **non-member non-friend function** (which can access none of these things);
+     - Make clearBrowser a **static member function of some utility class** in languages where all functions must be in classes (e.g., Eiffel, Java, C#, etc.)
+     - In C++, a more natural approach would be to make clearBrowser a **non-member function in the same namespace** as WebBrowser.
+       ![](images/non-member2namespace.png)
+  2. **Partitioning functionality** in this way is not possible when it comes from a class’s member functions, because a class must be defined in its entirety; it can’t be split into pieces(several header files);
+  3. **Extensibility**: If a WebBrowser client decides to write convenience functions related to downloading images, he or she just needs to create a **new header file containing the declarations of those functions in the WebBrowserStuff namespace**.
+
+1. As a general rule, most clients will be interested in only some of these sets of convenience functions.
+   ![](images/seperate_namespace.png)
 
 ### Item 24: Declare non-member functions when type conversions should apply to all parameters
+
+- If you need **type conversions** on all parameters to a function (including the one that would otherwise be pointed to by the `this` pointer), the function must be a non-member(但不一定是`friend`，尽量别是).
 
 ### Item 25: Consider support for a non-throwing swap

@@ -13,5 +13,3 @@
 5. `Scroll Rect`设置的Content动态添加子物体后，需要调用`LayoutRebuilder.ForceRebuildLayoutImmediate(content);`来刷新布局。
 
 6. 对象池达到 `maxSize` 后，回收对象会被销毁，而不是保留在池中。重新获取对象时，如果对象已经被销毁，会导致 `MissingReferenceException` 错误。
-
-7. 
