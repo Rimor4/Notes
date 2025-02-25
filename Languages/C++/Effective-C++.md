@@ -22,7 +22,7 @@
 ### Item 4: Make sure that objects are initialized before they're used
 
 - Manually initialize objects of **built-in type**, because C++ only some times initializes them itself.
-- In a constructor, prefer use of the **member initialization list** to assignment inside the body of the constructor. List data members in the initialization list in the same order they're declared in the class.
+- In a constructor, prefer use of the **member initialization list** to **assignment** inside the body of the constructor. List data members in the initialization list in the same order they're declared in the class.
 - Avoid initialization order problems across translation units( the relative order of initialization of non
   local static objects defined in different translation units is undefined ) by **replacing non-local static objects with local static objects**.
 
@@ -204,7 +204,7 @@
 - Declare data members private. It gives clients **syntactically uniform access to data**, affords **fine-grained access control**, allows **invariants** to be enforced, and offers class authors **implementation flexibility**. (if the data members are changed, an **_unknowably large amount of client code is broken_**.)
 - **protected** is no more encapsulated than **public**.
 
-## Item 23: Prefer non-member non-friend **functions** to member functions
+### Item 23: Prefer non-member non-friend **functions** to member functions
 
 - Prefer non-member non-friend functions to member functions. Doing so increases **encapsulation**, **packaging flexibility**, and **functional extensibility**.
   ![](images/non-member_vs_member.png)
@@ -223,4 +223,77 @@
 
 - If you need **type conversions** on all parameters to a function (including the one that would otherwise be pointed to by the `this` pointer), the function must be a non-member(但不一定是`friend`，尽量别是).
 
-### Item 25: Consider support for a non-throwing swap
+### Item 25: Consider support for a non-throwing `swap`
+
+- Provide a swap member function when `std::swap` would be inefficient for your type. Make sure your swap doesn’t throw **exceptions**.
+- If you offer a **member** swap, also offer a **non-member** swap that calls the member. For classes (not templates), **specialize** `std::swap`, too.
+- When calling swap, employ a using **declaration for std::swap**, then call swap without namespace qualification.
+- It’s fine to **totally specialize** std templates for user-defined types, but never try to add something completely new to `std`.
+
+1. 完全特化（total template specialization）
+   (不适用于类模板)
+   ![](images/total_specialization.png)
+   It’s okay to totally specialize templates in std, but it’s **not** okay to **add new templates** (or classes or functions or anything else) to std.
+2. When you want to “partially specialize” a function template, the usual approach is to simply add an **overload**.（不推荐向`std`中添加内容）
+   支持类和类模板。
+3. 非成员+ADL
+   (推荐，需要 write both a **non-member** version(调用 public 的 **member** function) in the same namespace as your class and a **specialization** of std::swap)
+   ![](images/ADL.png)
+   调用 `swap(a, b)` 时，编译器会查找 a 和 b 类型所在命名空间中的 swap, 通过 `using std::swap` 确保在没有用户定义 swap 时使用 `std::swap`
+   ![](images/ADL.Cont.png)
+
+   1. **ADL**(Argument-Dependent Lookup，参数依赖查找): 当调用一个函数时，编译器不仅会在当前作用域和全局作用域中查找该函数，还会在**函数参数类型所属的命名空间**中查找。
+      - 如果参数类型是类类型，则关联命名空间包括：
+        - 类所在的命名空间。
+        - 类的直接和间接基类所在的命名空间。
+      - 如果参数类型是模板实例化（如 `Widget<T>`），则关联命名空间包括：
+        - 模板参数类型所在的命名空间。
+        - 模板本身所在的命名空间。
+
+## Chapter 5: Implementations
+
+### Item 26: Postpone variable definitions as long as possible
+
+- **Postpone variable definitions** as long as possible. It increases program clarity and improves program efficiency.(postpone the definition until you have **initialization arguments** for it)
+
+1. 一般选择 Approach B 更好![](images/loop_variable.png)
+   - Approach A: 1 constructor + 1 destructor + n assignments.
+   - Approach B: n constructors + n destructors.
+
+### Item 27: Minimize casting
+
+- **Avoid casts** whenever practical, especially `dynamic_casts` in performance-sensitive code. If a design requires casting, try to develop a cast-free alternative.
+- When casting is necessary, try to **hide it** inside a function. Clients can then call the function instead of putting casts in their own code.
+- Prefer **C++-style casts** to old-style casts. They are easier to see, and they are more specific about what they do.
+
+### Item 28: Avoid returning "handles" to object internals
+
+- Avoid returning handles (references, pointers, or iterators) to object internals. Not returning handles increases **encapsulation**, helps **const** member functions act const, and minimizes the creation of **dangling handle**s.
+  ![](images/dangling_handle.png)
+  **boundingBox’s return value — temp — will be destroyed, and that will indirectly lead to the destruction of temp’s Points**
+
+1. 不能通过 const 引用来调用非 const 成员函数
+
+### Item 29: Strive for exception-safe code
+
+- Exception-safe functions **leak no resources** and allow **no data structures to become corrupted**, even when exceptions are thrown. Such functions offer the **basic**, **strong**, or **nothrow** guarantees.
+- The strong guarantee can often be implemented via **copy-and-swap**, but the strong guarantee is not practical for all functions.
+- A function can usually offer a guarantee no stronger than the weakest guarantee of the functions it calls.
+
+1. **Basic guarantee**: If an exception is thrown, the program is in a **valid state** and all invariants are intact, but the exact state of the program may **not be predictable**.
+2. **Strong guarantee**: If an exception is thrown, the program is in the **state it was in before the function was called**. No resources are leaked, and all invariants are intact.
+3. **Nothrow guarantee**: The function will not throw an exception.
+   ![picture 1](images/Effective-C%2B%2B/IMG_20250221-143657697.png)  
+   ![picture 2](images/Effective-C%2B%2B/IMG_20250221-143849769.png)  
+   ![picture 3](images/Effective-C%2B%2B/IMG_20250221-143904484.png)
+
+### Item 30: Understand the ins and outs of inline
+
+- Limit most inlining to small, frequently called functions. This facilitates **debugging** and **binary upgradability**, minimizes potential **code bloat**, and maximizes the chances of greater program speed.
+- Don’t declare function **templates** inline just because they appear in header files.
+
+1. **Binary upgradability**: If a library implementer later decides to change `f`, all clients who’ve used `f` must **recompile**. This is often undesirable. On the other hand, if `f` is a non-inline function, a modification to `f` requires only that clients **relink**.
+2. If an exception is thrown during **construction** of an object, any parts of the object that have already been fully **constructed** are **automatically destroyed**.
+   ![picture 4](images/Effective-C%2B%2B/IMG_20250223-225752749.png)
+3. Compilers typically don’t perform inlining across calls through **function pointers**
+4. Most compilers refuse to inline functions they deem too complicated (e.g., those that contain loops or are recursive), and all but the most trivial calls to virtual functions defy inlining.
