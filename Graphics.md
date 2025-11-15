@@ -26,3 +26,5 @@
    不好解决的两个问题：
     1. 三角形和节点（AABB）求交
     2. 三角形跨节点
+
+2. BVH（Bounding Volume Hierarchy）

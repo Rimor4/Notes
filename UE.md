@@ -31,3 +31,32 @@
 [https://zhuanlan.zhihu.com/p/518029029]
 
 1. Lyra ModularGameplay 初始化状态机 [https://www.kimi.com/chat/d396dmr12h64h658i0f0]
+
+## UObject
+
+### 生成（UHT）
+
+生成的代码主要分为两部分:
+
+- 各种 Z_辅助方法用来构造出各种 UClass * 等对象；
+- 另一部分是都包含着一两个 static 对象用来在程序启动的时候驱动登记，继而调用到前者的 Z_方法，最终完成注册
+
+### 注册
+
+Q&A:
+
+1. 为什么构造（InnerRegister）要放到最前?  
+   只先构造那些内建的;
+
+2. UObjectLoadAllCompiledInDefaultProperties真正构造UClass（OuterRegister）时如果UClass中包含了别的UClass属性不会有依赖问题吗？
+   不会，之前已经有UObjectProcessRegistrants内部构造过一遍所有注册的UClass了
+
+## 动画
+
+## UI
+
+
+## 调试
+
+[](https://www.bilibili.com/video/BV1iQ4y1j73A/)
+[](https://www.bilibili.com/video/BV1st46z6ECv/)
