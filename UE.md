@@ -4,6 +4,8 @@
 
 ### Lyra Gameplay 框架总览
 
+[](Ready\面试准备#Lyra#Gameplay框架)
+
 1. _EnhancedInput_ 框架：InputStack、InputMappingContext（优先级） TODO: InputAction 回调触发机制
 2. 引擎运行流程 [UE5 -- 引擎运行流程（从 main 到 BeginPlay）](https://zhuanlan.zhihu.com/p/577433224)
 3. Subsystems [《InsideUE4》GamePlay 架构（十一）Subsystems](https://zhuanlan.zhihu.com/p/158717151)
@@ -36,6 +38,10 @@
 
 1. Lyra ModularGameplay 初始化状态机 [https://www.kimi.com/chat/d396dmr12h64h658i0f0]
 
+### 动画
+
+[](Ready\面试准备.md#Lyra 的“模块化动画”)
+
 
 
 ## UObject
@@ -51,7 +57,7 @@
 
 Q&A:
 
-1. 为什么构造（InnerRegister）要放到最前?  
+1. 为什么构造（InnerRegister）要放到最前? 
    只先构造那些内建的;
 
 2. UObjectLoadAllCompiledInDefaultProperties真正构造UClass（OuterRegister）时如果UClass中包含了别的UClass属性不会有依赖问题吗？
@@ -59,9 +65,135 @@ Q&A:
 
 ## 动画
 
+[动画更新流程](Ready\面试准备.md#动画更新流程)
+
 [[UnrealCircle深圳\]《黑神话：悟空》的Motion Matching | 游戏科学 招文勇_哔哩哔哩_bilibili](https://www.bilibili.com/video/BV1GK4y1S7Zw/)
 
-<img src="D:\Projects\NOTES\images\image-20251116115328799.png" alt="image-20251116115328799" style="zoom: 33%;" />
+<img src="D:\Projects\NOTES\images\image-20251116115328799.png" alt="image-20251116115328799" style="zoom: 25%;" />
+
+
+
+## GAS
+
+[](Ready\面试准备#GAS)
+
+
+
+## AI
+
+[](Ready\面试准备.md#Behavior Tree vs. State Tree)
+
+### 行为树
+
+#### 节点的**单例问题**
+
+行为树节点：默认一棵行为树资源对应一个单例（不管是不是不同的ai跑）
+
+解决办法：
+
+1. ```cpp
+   UBTMyTask::UBTMyTask()
+   {
+       bCreateNodeInstance = true;
+   }
+   ```
+
+2. 把成员数据独立出来，交给UE托管:
+
+   首先你要为自己的成员变量定义一个结构体。
+
+   然后要在你的节点里面重写`GetInstanceMemorySize`，返回结构体的大小（这一步的作用是告诉UE为你的成员数据开辟对应的内存空间）。
+
+   ```cpp
+   USTRUCT()
+   struct FMyTaskMemory
+   {
+       GENERATED_BODY()
+   
+       UPROPERTY()
+       AMyCharacter* ControlledCharactor = nullptr;
+   }
+   
+   UCLASS()
+   class UBTMyTask
+   {
+       GENERATAED_BODY()
+   
+       virtual uint16 GetInstanceMemorySize() const override
+       {
+           return sizeof(FMyTaskMemory);
+       }
+   
+       virtual void InitializeMemory(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, EBTMemoryInit::Type InitType) const override
+       {
+           // 获取数据内存块
+           FMyTaskMemory* MemberMemory = CastInstanceNodeMemory<FMyTaskMemory>(NodeMemory);
+           MemberMemory->ControlledCharactor = StaticCast<AMyCharacter>(OwnerComp->GetOwner()->GetControlledPawn());
+       }
+   
+       virtual void TickTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds) override
+       {
+           FMyTaskMemory* MemberMemory = CastInstanceNodeMemory<FMyTaskMemory>(NodeMemory);
+           UE_LOG(LogTemp, Log, TEXT("角色的id是：%d"), MemberMemory->ControlledCharactor->CharacterID)
+       }
+   }
+   ```
+
+#### 打断（Decorator）
+
+【打断行为可以提高性能，而不是每帧都从root开始】
+
+##### 注册阶段 (Registering)
+
+当行为树运行并执行到带有黑板装饰器的节点时，`UBTDecorator_Blackboard` 会调用基类中的逻辑：
+
+1. **获取黑板组件**：通过 `BehaviorTreeComponent` 找到关联的 `UBlackboardComponent`。
+2. **绑定委托（Delegate）**：它会向黑板组件注册一个回调。在源码层级，这通常涉及到 `UBlackboardComponent::RegisterObserver`。它将装饰器自身的一个函数（即 `OnBlackboardKeyValueChange`）与特定的 **黑板键（Blackboard Key）** 绑定。
+
+##### 触发阶段 (Firing)
+
+1. **黑板值变更**：当你在代码或行为树任务中调用 `SetValueAs...`（如 `SetValueAsObject`）时，黑板组件内部会检测新旧值是否相等。
+2. **分发通知**：如果值确实发生了改变，黑板组件会遍历所有注册在该 Key 上的观察者（Observers）。
+
+
+
+##### 打断流程 (ConditionalFlowAbort) 的详细逻辑
+
+一旦监听到值改变，装饰器必须决定是否要“掐断”当前正在执行的任务。这就是 `ConditionalFlowAbort` 的职责。
+
+它会根据你在编辑器中设置的 **Observer Aborts** 选项（None, Self, Lower Priority, Both）来执行不同的逻辑：
+
+逻辑判断：是否满足打断条件？
+
+在调用打断前，它会先执行一次 `CalculateRawConditionValue`。
+
+- 比如你设置“当 `Enemy` 不为空时打断”。如果黑板值变动是从 `EnemyA` 变成 `EnemyB`（依然不为空），虽然触发了监听，但逻辑判定没变，则不会打断。
+
+执行打断：如何停止当前任务？
+
+如果判定需要打断，`ConditionalFlowAbort` 会触发核心的 **Flow Abort** 流程：
+
+1. **确定打断范围**：
+   - **Self**：打断当前装饰器下的子树。
+   - **Lower Priority**：打断当前节点右侧（优先级更低）的所有正在运行的任务，强制让行为树重新评估并回到这个高优先级的装饰器节点。
+2. **调用 `RequestExecution`**：
+   - 装饰器通过 `UBehaviorTreeComponent` 发起一个“重评估请求”。
+3. **清理与转换**：
+   - 行为树会立即调用当前运行任务的 `AbortTask`，触发清理逻辑（如停止移动）。
+   - 下一帧（或立即），行为树**从打断点重新选择路径**，切换到符合条件的高优先级分支。
+4. **只有两种情况会重新寻路**：
+   1. 当前任务执行完毕（返回 `Succeeded` 或 `Failed`）。
+   2. 发生了**打断（Abort）**。
+
+
+
+### 状态树
+
+<img src="D:\Projects\NOTES\images\StateTree运行逻辑.png" alt="StateTree运行逻辑"  />
+
+
+
+
 
 
 
@@ -69,7 +201,7 @@ Q&A:
 
 ### 点击流程
 
-![picture 0](D:\Projects\NOTES\images\IMG_20251115-153540054.png)  
+<img src="D:\Projects\NOTES\images\IMG_20251115-153540054.png" alt="picture 0" style="zoom: 67%;" />  
 
 - PreviewMouseButtonDown 阶段
 从路径第 0 个元素开始往后遍历，依次调用 Root → Panel A → Button B 的 OnPreviewMouseButtonDown。
