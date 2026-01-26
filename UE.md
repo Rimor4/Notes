@@ -237,13 +237,96 @@
 
 ## AI
 
-[](Ready\面试准备.md#Behavior Tree vs. State Tree)
-
 ### 行为树
+
+#### 不同情境下的执行逻辑
+
+**1. 初始启动（首次执行）**
+
+当 AI 控制器调用 `Run Behavior Tree` 时：
+
+- **逻辑流程**：它会从 **Root** 开始，从左到右扫描第一个有效的分支。
+- **搜索过程**：它会检查遇到的每一个选择器（Selector）、序列（Sequence）以及它们身上的装饰器（Decorator）。
+- **落脚点**：直到找到第一个可以执行的任务节点（Task），将其标记为 `In Progress`，搜索停止。
+
+**2. 任务进行中（Running / In Progress）**
+
+这是最常见的情况，也是 UE 最省性能的地方：
+
+- **逻辑流程**：**不再从 Root 开始搜索**。
+- **执行状态**：行为树系统会直接“挂起”在当前正在运行的任务节点上。
+- **Tick 逻辑**：只有当该任务显式开启了 `bNotifyTick`，或者它上方挂载了带间隔（Interval）的 **Service** 时，才会发生局部的 Tick。
+- **黑板静默**：如果没有任何黑板值变化触发中断，树的其他部分完全处于“休眠”状态。
+
+**3. 任务成功或失败（正常的执行流转）**
+
+当当前任务调用 `Finish Execute`（Success 或 Failed）时：
+
+- **逻辑流程**：**不会回到 Root**，而是向上回溯到父节点（如 Sequence）。
+- **后续动作**：
+  - 如果是 **Sequence** 且任务成功，它会向右移动到下一个子节点。
+  - 如果是 **Selector** 且任务失败，它会尝试向右移动到下一个备选分支。
+- **重新搜索**：只有当整个分支跑完，逻辑才会回到父级节点继续向右寻找。
+
+
+
+#### 基于事件的打断（Decorator）
+
+【打断行为可以提高性能，而不是每帧都从root开始】
+
+**注册阶段 (Registering)**
+
+当行为树运行并执行到带有黑板装饰器的节点时，`UBTDecorator_Blackboard` 会调用基类中的逻辑：
+
+1. **获取黑板组件**：通过 `BehaviorTreeComponent` 找到关联的 `UBlackboardComponent`。
+2. **绑定委托（Delegate）**：它会向黑板组件注册一个回调。在源码层级，这通常涉及到 `UBlackboardComponent::RegisterObserver`。它将装饰器自身的一个函数（即 `OnBlackboardKeyValueChange`）与特定的 **黑板键（Blackboard Key）** 绑定。
+
+**触发阶段 (Firing)**
+
+1. **黑板值变更**：当你在代码或行为树任务中调用 `SetValueAs...`（如 `SetValueAsObject`）时，黑板组件内部会检测新旧值是否相等。
+2. **分发通知**：如果值确实发生了改变，黑板组件会遍历所有注册在该 Key 上的观察者（Observers）。
+
+---
+
+**打断流程 (ConditionalFlowAbort) 的详细逻辑**
+
+一旦监听到值改变，装饰器(通常挂载在一个黑板键上) 必须决定是否要“掐断”当前正在执行的任务。这就是 `ConditionalFlowAbort` 的职责。
+
+它会根据你在编辑器中设置的 **Observer Aborts** 选项（None, Self, Lower Priority, Both）来执行不同的逻辑：
+
+逻辑判断：是否满足打断条件？(OnValueChange和OnResultChange)
+
+在调用打断前，它会先执行一次 `CalculateRawConditionValue`。
+
+- 比如如果是OnResultChange, 当你设置“当 `Enemy` 不为空时打断”。如果黑板值变动是从 `EnemyA` 变成 `EnemyB`（依然不为空），虽然触发了监听，但逻辑判定没变，则不会打断。
+
+执行打断：如何停止当前任务？
+
+如果判定需要打断，`ConditionalFlowAbort` 会触发核心的 **Flow Abort** 流程：
+
+1. **确定打断范围**：
+   - **Self**：打断当前装饰器下的子树。
+   - **Lower Priority**：打断当前节点右侧（优先级更低）的所有正在运行的任务，强制让行为树重新评估并回到这个高优先级的装饰器节点。
+   
+2. **调用 `RequestExecution`**：
+   - 装饰器通过 `UBehaviorTreeComponent` 发起一个“重评估请求”。
+   
+3. **清理与转换**：
+   - 行为树会立即调用当前运行任务的 `AbortTask`，触发清理逻辑（如停止移动）。
+   - 下一帧（或立即），行为树**从打断点重新选择路径**，切换到符合条件的高优先级分支。
+   
+4. **只有两种情况会重新寻路**：
+   1. 当前任务执行完毕（返回 `Succeeded` 或 `Failed`）。
+   
+   2. 发生了**打断（Abort）**。
+   
+      
 
 #### 节点的**单例问题**
 
-行为树节点：默认一棵行为树资源对应一个单例（不管是不是不同的ai跑）
+> 详细请参考：[【图解UE4源码】AI行为树系统 其一 行为树节点的单例设计 - 知乎](https://zhuanlan.zhihu.com/p/369100301)
+
+问题：行为树节点：默认一棵行为树资源对应一个单例（不管是不是不同的ai跑）
 
 解决办法：
 
@@ -295,61 +378,17 @@
    }
    ```
 
-#### 打断（Decorator）
 
-【打断行为可以提高性能，而不是每帧都从root开始】
-
-##### 注册阶段 (Registering)
-
-当行为树运行并执行到带有黑板装饰器的节点时，`UBTDecorator_Blackboard` 会调用基类中的逻辑：
-
-1. **获取黑板组件**：通过 `BehaviorTreeComponent` 找到关联的 `UBlackboardComponent`。
-2. **绑定委托（Delegate）**：它会向黑板组件注册一个回调。在源码层级，这通常涉及到 `UBlackboardComponent::RegisterObserver`。它将装饰器自身的一个函数（即 `OnBlackboardKeyValueChange`）与特定的 **黑板键（Blackboard Key）** 绑定。
-
-##### 触发阶段 (Firing)
-
-1. **黑板值变更**：当你在代码或行为树任务中调用 `SetValueAs...`（如 `SetValueAsObject`）时，黑板组件内部会检测新旧值是否相等。
-2. **分发通知**：如果值确实发生了改变，黑板组件会遍历所有注册在该 Key 上的观察者（Observers）。
-
-
-
-##### 打断流程 (ConditionalFlowAbort) 的详细逻辑
-
-一旦监听到值改变，装饰器必须决定是否要“掐断”当前正在执行的任务。这就是 `ConditionalFlowAbort` 的职责。
-
-它会根据你在编辑器中设置的 **Observer Aborts** 选项（None, Self, Lower Priority, Both）来执行不同的逻辑：
-
-逻辑判断：是否满足打断条件？
-
-在调用打断前，它会先执行一次 `CalculateRawConditionValue`。
-
-- 比如你设置“当 `Enemy` 不为空时打断”。如果黑板值变动是从 `EnemyA` 变成 `EnemyB`（依然不为空），虽然触发了监听，但逻辑判定没变，则不会打断。
-
-执行打断：如何停止当前任务？
-
-如果判定需要打断，`ConditionalFlowAbort` 会触发核心的 **Flow Abort** 流程：
-
-1. **确定打断范围**：
-   - **Self**：打断当前装饰器下的子树。
-   - **Lower Priority**：打断当前节点右侧（优先级更低）的所有正在运行的任务，强制让行为树重新评估并回到这个高优先级的装饰器节点。
-2. **调用 `RequestExecution`**：
-   - 装饰器通过 `UBehaviorTreeComponent` 发起一个“重评估请求”。
-3. **清理与转换**：
-   - 行为树会立即调用当前运行任务的 `AbortTask`，触发清理逻辑（如停止移动）。
-   - 下一帧（或立即），行为树**从打断点重新选择路径**，切换到符合条件的高优先级分支。
-4. **只有两种情况会重新寻路**：
-   1. 当前任务执行完毕（返回 `Succeeded` 或 `Failed`）。
-   2. 发生了**打断（Abort）**。
 
 
 
 ### 状态树
 
-[StateTree 架构深度源码解析：核心机制、内存布局与执行流水线](https://zhuanlan.zhihu.com/p/1975009910996615830)
+#### 初始化及Tick逻辑
 
-<img src="D:\Projects\NOTES\images\StateTree运行逻辑.png" alt="StateTree运行逻辑"  />
+<img src="D:\Projects\NOTES\images\StateTree运行逻辑.png" alt="StateTree运行逻辑"  />						参考图来自：[[UOD2022\]从行为树到状态树 | Epic 周澄清_哔哩哔哩_bilibili](https://www.bilibili.com/video/BV1ed4y1b7Zk/)
 
-#### 一、 初始化流程（Initialization）
+**一、 初始化流程（Initialization）**
 
 当 StateTree 开始运行（Tree Start）时，系统会进行数据准备和初始状态选择。
 
@@ -363,7 +402,7 @@
 
 ------
 
-#### 二、 运行时每帧更新（Tick）
+**二、 运行时每帧更新（Tick）**
 
 StateTree 的 Tick 分为两个主要部分：数据更新与 Task 执行。
 
@@ -373,27 +412,28 @@ StateTree 的 Tick 分为两个主要部分：数据更新与 Task 执行。
 
 2. **Task 逻辑执行**：
 
-   - **执行顺序**：**自根到叶（正序）**调用每个激活状态里 Task 的 `Tick`。
+   - **执行顺序**：**自根到叶**调用每个激活状态里 Task 的 `Tick`。
    - **阻断机制**：如果某个 Task 在 Tick 中返回了“成功”或“失败”，系统会**停止后续（更深层级）Task 的 Tick**。
 
 3. **任务完成处理（StateComplete）**：
 
    - 一旦 Task 完成（不再返回 Running），系统会**自叶到根（逆序）**调用所有已激活状态中 Task 的 `StateComplete`。
 
-4. 过渡流程（Transition）
+4. **过渡流程（Transition）**
+
+   注: 只有每帧的活跃状态及其父状态,并在Trigger条件(有OnStateCompleted[最常用], OnStateSucceeded, OnStateFailed, OnTick, OnEvent, OnDelegate这几种) 满足时,才会评估过渡条件。
 
    1. **条件检查**：
-
       - **执行顺序**：**自叶到根（逆序）**检查 Transition 上的 Conditions 是否满足。
       - **逻辑逻辑**：子状态（叶子）通常具有更高的逻辑优先级，若子状态满足跳转条件，则优先触发。
-
+      
    2. **退出旧状态**：
 
       - 如果条件满足，系统会**自叶到根（逆序）**依次调用当前路径上所有 Task 的 `ExitState`，清理旧状态逻辑。
 
    3. **进入新状态**：
 
-      - 调用 `SelectState` 跳转至目标状态（Target State），重新开始“自根到叶”的 Enter 流程。
+      - 调用 `SelectState` 跳转至目标状态（Target State），重新开始“**自根到叶**”的 Enter 流程。
 
       - **SelectState**流程
         - **识别目标：** 系统首先解析目标状态句柄（State Handle）。
@@ -405,9 +445,7 @@ StateTree 的 Tick 分为两个主要部分：数据更新与 Task 执行。
 
 在 UE5 的 **StateTree** 体系中，数据绑定（Data Binding）与传播机制是其区别于行为树（Behavior Tree）最核心的特性之一。它通过显式的**属性链接（Property Link）**代替了行为树中基于字符串索引的黑板（Blackboard）模式。
 
-以下是根据你提供的运行逻辑图及 UE5 核心机制进行的详解：
 
-------
 
 1. 数据绑定的核心概念：Schema 与 Context
 
@@ -415,8 +453,6 @@ StateTree 的 Tick 分为两个主要部分：数据更新与 Task 执行。
 
 - **Schema 定义上下文**：每个 StateTree 必须选择一个 Schema（如 `StateTreeGameplayTasksSchema`）。Schema 规定了该树能访问哪些**外部数据**（Context Data），例如 `AActor`、`UAIPerceptionComponent` 或自定义的 `UObject`。
 - **Context 注入**：当 StateTree 开始运行（初始化阶段），外部系统会将这些具体的对象实例注入到 StateTree 的**实例数据（Instance Data）**中。
-
-------
 
 2. 数据传播路径：Evaluator -> Task
 
@@ -435,12 +471,15 @@ StateTree 的 Tick 分为两个主要部分：数据更新与 Task 执行。
 
 
 
-#### Behavior Tree vs. State Tree
+### Behavior Tree vs. State Tree
+
+1. 表格总结
 
 | **特性**     | **Behavior Tree (行为树)**                                   | **State Tree (状态树)**                                      |
 | ------------ | ------------------------------------------------------------ | ------------------------------------------------------------ |
 | **设计范式** | **基于决策 (Decision-based)**。每帧（或事件触发）从根节点重新评估，寻找可执行的叶节点。 | **基于状态 (State-based)**。它是分层状态机 (HFSM) 的进化版，明确“当前正处于哪个状态”。 |
 | **运行机制** | 依靠 **Selector/Sequence** 控制流，通过失败/成功反馈来回溯。 | 依靠 **Transition (过渡)** 驱动。状态切换是显式的，只有满足条件才进行状态跳转。 |
+| **底层架构** | 基于对象: 树上的每个节点都是一个独立的对象，大型行为树会产生数以千计的小对象。 | 基于数据: 将状态和数据存储在连续的内存块（Task Data) 中      |
 | **数据通信** | 强绑定 **Blackboard (黑板)**。数据读写往往需要显式的 Key 绑定。 | 采用 **Property Bag / Data Bindings**。支持更直接的属性引用，减少了黑板带来的维护成本。 |
 
 2. 核心区别 (三大维度)
@@ -466,6 +505,14 @@ C. **数据共享**：Blackboard vs. Data Bindings
 
 - **行为树 (BT)**：通常绑定一个 **Blackboard (黑板)**。所有数据读写都要通过 String/Name 去查找黑板键，存在一定的开销且类型检查较弱。
 - **状态树 (ST)**：使用了 **Property Bindings (属性绑定)**。它可以直接在编辑器里将一个 Task 的输出连到另一个 Task 的输入，类似于蓝图参数传递。这在开发时更安全，运行时也更高效。
+
+
+
+### 用状态树重现Lyra Bot AI
+
+下面进入实践环节，用UE5.6的状态树重现Lyra示例项目中原本用行为树开发的AI敌人逻辑。
+
+
 
 
 
