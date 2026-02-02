@@ -235,6 +235,12 @@
 
 
 
+### 【实践】预测IK
+
+
+
+
+
 ## AI
 
 ### 行为树
@@ -322,7 +328,7 @@
    
       
 
-#### 节点的**单例问题**
+#### 节点的单例问题
 
 > 详细请参考：[【图解UE4源码】AI行为树系统 其一 行为树节点的单例设计 - 知乎](https://zhuanlan.zhihu.com/p/369100301)
 
@@ -390,58 +396,171 @@
 
 **一、 初始化流程（Initialization）**
 
-当 StateTree 开始运行（Tree Start）时，系统会进行数据准备和初始状态选择。
+当 StateTree 开始运行（StartTree）时，系统会进行数据准备和初始状态选择。
 
 1. **Evaluator 数据准备**：
    - 首先调用所有 Evaluator 的 `TreeStart`，随后执行一次 `Tick`。
    - **目的**：在状态选择前，预先从环境中提取并处理好必要的数据（如感知到的敌人信息、玩家距离等）。
-2. **初始状态选择（SelectState）**：
+2. **初始状态选择（SelectState[下面有详解] ）**：
    - 目标状态默认为 **Root**。
    - **条件判定**：自根向叶检查 `Enter Conditions`，判断哪些子状态可以被激活。
-   - **Task 入场**：一旦确定了激活路径，系统会**自根到叶（正序）**依次调用路径上每个 State 中 Task 的 `EnterState`。
+   - **Task 入场**：一旦确定了激活路径，系统会**自根到叶（正序）**依次调用路径上每个 State 中 **Task** 的 `EnterState`。
 
 ------
 
 **二、 运行时每帧更新（Tick）**
 
-StateTree 的 Tick 分为两个主要部分：数据更新与 Task 执行。
+StateTree 的 Tick 分为两个主要部分：数据更新/Task执行（**TickUpdateTasksInternal**）与 过渡判定（**TickTriggerTransitionsInternal**）。
 
-1. **Evaluator 更新**：
+1. **TickUpdateTasksInternal**
 
-   - 每帧最先调用 `Evaluator's Tick`，更新全局或上下文数据。
+   1.  `TickTasks` 中进行 **Evaluator** 更新（更新全局或上下文数据）、**GlobalTasks**执行和**自根到叶**进行所有**ActiveState中Task**的**Tick**。
+      **返回值”坏消息优先“原则**：结果是上面所有Task执行结果的**聚合**，且`Failed` > `Succeeded` > `Stopped` > `Running`
+   2. 一旦上面的Tick最终结果不是Running，系统会调用`Context.StateCompleted` ，内部**自叶到根（逆序）**调用所有已激活状态中 Task 的 `StateCompleted`，以及如果需要，也调用Condition上的state change events.
 
-2. **Task 逻辑执行**：
+2.  **TickTriggerTransitionsInternal**
 
-   - **执行顺序**：**自根到叶**调用每个激活状态里 Task 的 `Tick`。
-   - **阻断机制**：如果某个 Task 在 Tick 中返回了“成功”或“失败”，系统会**停止后续（更深层级）Task 的 Tick**。
+   1.  MaxIterations次迭代，每次调用**TriggerTransitions**（内部检查顺序为**从叶到根**逆序）
 
-3. **任务完成处理（StateComplete）**：
+      ```cpp
+      bool FStateTreeExecutionContext::TriggerTransitions()
+      {
+      	//1. Process transition requests. Keep the single request with the highest priority.
+      	//2. Process tick/event/delegate transitions and tasks. TriggerTransitions, from bottom to top.
+      	// If delayed,
+      	//	If delayed completed, then process.
+      	//	Else add them to the delayed transition list.
+      	//3. If no transition, Process completion transitions, from bottom to top.
+      	//4. If transition occurs, check if there are any frame (sub-tree) that completed.
+      	...
+      }
+      ```
 
-   - 一旦 Task 完成（不再返回 Running），系统会**自叶到根（逆序）**调用所有已激活状态中 Task 的 `StateComplete`。
+      内部调用**RequestTransitionInternal**，进一步在内部调用SelectState（转换到一个父状态（如 "Combat"）必须通过 `SelectState` 递归决定最终进入哪个叶子子状态（如 "Melee_Attack"））
 
-4. **过渡流程（Transition）**
+   2. 如成功过渡：
+      - 调用Context的**ExitState**，内部从叶到根逆序调用Task的ExitState
+      - 调用 **EnterState**（同初始化时）
+        
 
-   注: 只有每帧的活跃状态及其父状态,并在Trigger条件(有OnStateCompleted[最常用], OnStateSucceeded, OnStateFailed, OnTick, OnEvent, OnDelegate这几种) 满足时,才会评估过渡条件。
 
-   1. **条件检查**：
-      - **执行顺序**：**自叶到根（逆序）**检查 Transition 上的 Conditions 是否满足。
-      - **逻辑逻辑**：子状态（叶子）通常具有更高的逻辑优先级，若子状态满足跳转条件，则优先触发。
-      
-   2. **退出旧状态**：
 
-      - 如果条件满足，系统会**自叶到根（逆序）**依次调用当前路径上所有 Task 的 `ExitState`，清理旧状态逻辑。
+**SelectState**逻辑
 
-   3. **进入新状态**：
+```cpp
+bool FStateTreeExecutionContext::SelectState(const FSelectStateArguments& Args, const TSharedRef<FSelectStateResult>& OutSelectionResult)
+{
+	// 1. Find the target root state.
+	// 2. If the the target frame is active, then copy all previous states from the previous frames.
+	//   If any state inside the frame is completed (before the target), then the transition fails.
+	//   See EStateTreeStateSelectionRules::CompletedStateBeforeTargetFailTransition.
+	// 3. In the target frame, start adding states that match the source/target.
+	//   If the state is completed (before the target), then the transition fails.
+	//   See EStateTreeStateSelectionRules::CompletedStateBeforeTargetFailTransition.
+	// 4. New/Sustained states need to be reevaluated (see SelectStateInternal).
+	// 5. Else, handle fallback.
+	// 
+	// Source is from where the transition request occurs.
+	//  The source frame is valid but the source state can be invalid. It will be the top root state if needed.
+	//  It doesn't need to be in the same frame as the target.
+	// Target is where we wish to go. The selection can stop or select another state (depending on the state's type).
+	// Selected is the selection result.
+	//
+	// ExitState: If the state >= Target and is in the selected, then the transition is "sustained" and the instance data is untouched.
+	// ExitState: If the state not in the selected (removed state), then the transition is "changed" and the state is removed.
+	// EnterState: If the state >= Target and it is in the actives, then the transition is "sustained" and the instance data is untouched.
+	// EnterState: If the state >= Target and it is not in the actives (new state), then the transition is "changed" and the state is added.
+	// 
+	// Rules might impact the results.
+	// In the examples,  "New State if completed" is only valid if EStateTreeStateSelectionRules::CompletedTransitionStatesCreateNewStates
+	// Examples: Active | Source | Target | Selected
+	//
+	//           ABCD   | ABCD   | ABCDE  | ABCDEF, ABCD'EF
+	//  New D if completed, always new EF.
+	//  ExitState: Sustained -. Changed -, D. EnterState: Sustained -. Changed EF, D'EF.
+	//
+	//           ABCD   | AB     | ABI    | ABIJ, AB'IJ
+	//  New B if completed, always new IJ.
+	//  ExitState: Sustained -. Changed CD, BCD. EnterState: Sustained -. Changed IJ, B'IJ.
+	// 
+	//           ABCD   | AB     | ABC    | ABCD, ABCD', ABC'D', AB'C'D'
+	//  New D, CD, BCD if completed.
+	//  ExitState: Sustained CD, C, -, -. Changed -, D, CD, BCD. EnterState: Sustained CD, C, -, -. Changed -, D', C'D', B'C'D'.
+	//
+	//           ABCD   | ABC     | AB    | ABCD, ABCD', ABC'D', AB'C'D'
+	//  New D, CD, BCD if completed.
+	//  ExitState: Sustained BCD, BC, B, -. Changed -, D, CD, BCD. EnterState: Sustained BCD, BC, B, -. Changed -, D', C'D', B'C'D'.
+	// 
+	//           ABCD   | AB     | AX     | AXY
+	//  Source is not in target. New XY.
+	//  ExitState: Sustained -. Changed BCD. EnterState: Sustained -. Changed XY
+	//
+	//           ABCD   | AB     | AB     | ABCD, ABCD', ABC'D', AB'C'D'
+	//  Source is target. New D, CD, BCD if completed.
+	//  ExitState: Sustained BCD, BC, B, -. Changed -, D, CD, BCD. EnterState: Sustained BCD, BC, B, -. Changed -, D', C'D', B'C'D'.
 
-      - 调用 `SelectState` 跳转至目标状态（Target State），重新开始“**自根到叶**”的 Enter 流程。
+```
 
-      - **SelectState**流程
-        - **识别目标：** 系统首先解析目标状态句柄（State Handle）。
-        - **寻找共同祖先：** 这是一个关键的算法步骤。执行上下文在树的层级结构中向上回溯，直到找到当前状态（Current State）和目标状态（Target State）的**最近公共祖先**（或者根节点）。
-        - **退出阶段（Exit Phase）：** 系统自底向上（From Leaf to Root）调用所有状态的 `ExitState()`，直到（但不包括）共同祖先。
-        - **进入阶段（Enter Phase）：** 系统自顶向下（From Root to Leaf）调用从共同祖先到新目标叶子节点路径上所有状态的 `EnterState()` 。
+1. 路径寻找与合法性检查 (Step 1-3)
+
+- **Target Root State**: 确定目标状态所属的帧（Frame）。State Tree 支持 Linked Tree，因此目标可能在子树中。
+- **CompletedStateBeforeTargetFailTransition**: 这是一个关键的安全阀。如果目标路径上的某个中间状态已经处于 `Completed` 状态，且规则不允许跳过，则整个转换请求失败。这保证了逻辑的原子性，防止进入一个已经失效的父状态。
+
+2. 重评估逻辑 (Step 4: SelectStateInternal)
+
+- 新状态（New States）或需要重评估的状态会进入 `SelectStateInternal`。这是真正的**递归探测点**。系统会运行该状态的 `Enter Conditions` 和 `Selector` 逻辑，决定最终激活哪个子状态。
+
+3. 状态生命周期：Sustained vs Changed
+
+| **状态分类**         | **定义**                                                     | **行为 (Execution)**                         | **内存 (Instance Data)**              |
+| -------------------- | ------------------------------------------------------------ | -------------------------------------------- | ------------------------------------- |
+| **Sustained (维持)** | 状态在 `Active` 和 `Selected` 路径中都存在，且在 `Target` 之下（或作为祖先）。 | 不触发 `Exit/Enter`。                        | **保留**。Task 的成员变量值保持不变。 |
+| **Changed (变更)**   | 状态不在新路径中，或者是新加入路径的。                       | 触发 `ExitState` (旧) -> `EnterState` (新)。 | **重置/初始化**。重新从模板拷贝数据。 |
+
+4. 示例场景
+
+场景 A：向上跳转再向下探测
+
+```
+Active: ABCD | Source: AB | Target: ABI | Selected: ABIJ
+```
+
+- **推理**：
+  1. 当前路径是 `A->B->C->D`。
+  2. 我们在 `B` 状态触发了一个转换，目标是 `I`。
+  3. 系统保留 `A` 和 `B`（Sustained）。
+  4. 系统销毁 `C` 和 `D`（Exit）。
+  5. 系统进入 `I`，并根据 `I` 的选择逻辑自动选择了子状态 `J`（Enter）。
+- **结果**：路径变为 `ABIJ`。
+
+场景 B：同级或自身重入
+
+```
+Active: ABCD | Source: AB | Target: ABC | Selected: ABCD'
+```
+
+- **推理**：
+  1. 目标是 `C`，而 `C` 已经在当前路径中。
+  2. 如果 `D` 已经完成（Completed）且设置了 `CreateNewStates`，系统会 Exit `D` 并 Enter 一个全新的 `D'`。
+- **设计动机**：这解决了“循环任务”的需求。比如在“巡逻”状态下，完成一个路点后再次请求进入“巡逻”，系统会刷新子状态的执行进度。
+
+场景 C：跨分支跳转
+
+```
+Active: ABCD | Source: AB | Target: AX | Selected: AXY
+```
+
+- **推理**：
+  1. `Source` 的目标 `X` 不在当前路径 `B` 分支下。
+  2. 找到最近公共祖先 `A`。
+  3. 维持 `A`，销毁 `B, C, D`。
+  4. 进入 `X, Y`。
+
+
 
 #### 数据绑定与属性传播机制
+
+##### 概览
 
 在 UE5 的 **StateTree** 体系中，数据绑定（Data Binding）与传播机制是其区别于行为树（Behavior Tree）最核心的特性之一。它通过显式的**属性链接（Property Link）**代替了行为树中基于字符串索引的黑板（Blackboard）模式。
 
@@ -468,6 +587,21 @@ StateTree 的 Tick 分为两个主要部分：数据更新与 Task 执行。
 - **底层机制**：这在底层是通过 **`FStateTreePropertyBinding`** 实现的。它不依赖黑板键的字符串查询，而是直接记录属性在内存中的偏移量（Offset），因此访问速度极快。
 
 ------
+
+##### 详细分析
+
+###### 数据布局与内存模型
+
+###### 数据绑定与上下文
+
+四种变量数据
+
+- **Context**类型数据存储在FStateTreeExecutionContext中的ContextAndExternalDataViews中，被Schema中的SetContextDataByName函数所手动设置（在StartTree时）。
+
+- **Input/Output/Parameter**类型变量则是通过PropertyBinding机制绑定，具体区别为：
+  Input只能绑定到外部如 Context、Evaluator或上层State 的 Output、其他状态的 Parameter）的外部信息；
+  Output不“绑定”到外部源；
+  Parameters包含Task/Condition 局部 Parameter或Global Parameters (资产全局参数)。
 
 
 
@@ -508,13 +642,230 @@ C. **数据共享**：Blackboard vs. Data Bindings
 
 
 
-### 用状态树重现Lyra Bot AI
+### 【实践】用状态树重现Lyra Bot AI
 
-下面进入实践环节，用UE5.6的状态树重现Lyra示例项目中原本用行为树开发的AI敌人逻辑。
+之前的文章[UE5 行为树与状态树浅析及对比 - 知乎](https://zhuanlan.zhihu.com/p/1999137935317033648)对状态树的一些细节及相比行为树的优势做了一些分析。本篇文章则进入到实践环节。用UE5.7的状态树重现Lyra示例项目中原本用行为树开发的AI敌人逻辑。
+
+> Github仓库：https://github.com/Rimor4/LyraStarterGame/tree/StateTree
+
+#### 最终效果
+
+原行为树：
+[ST.gif]
+
+状态树：
+[ST.gif]
+
+#### 重现步骤
+
+**Evaluator**
+
+将原行为树中部分需要高频监测的 **Service**（如 CheckAmmo、Shoot）转换为 StateTree 的 **Global Evaluator**。这样可以将如 `OutOfAmmo` 等需要全局更新的变量逻辑剥离出来，统一在 Evaluator 中处理，而非分散在各个节点中。
+
+**Condition**
+
+用StateTree中的状态Enter Condition和Transition Condition，即状态之间的转换条件模拟行为树中的Decorator
+
+**Task**
+
+我自己的实现Task可以分为两种：
+
+- 一种是类似行为树中的**Service**，一般放在非叶节点（最后也可以和第二种task共同放在叶状态中），不做打断，隔一段时间就会运行
+- 一种是行为树叶节点的task，一般也放在状态树的叶状态。
+
+**实现Service**
+
+见下文“踩到的坑”第二条
+
+**实现Selector**
+
+为了复现行为树中的selector逻辑，主要用状态之间的OnStateFailed类型过渡方式。
+![image-20260130223757007](D:\Projects\NOTES\images\image-20260130223757007.png)
+
+**使用SubTree等方法简化状态**
+
+实践中先按照行为树的连法将节点一一对应地转换到状态树，但最终有部分分支逻辑是重复的，以及也有单个分支过深而丢失了状态树扁平化状态的优势的问题。
+
+解决方法便是
+
+1. 将多个状态简化、合并为一个，task可以聚合在同一个状态内部。
+2. 将大部分相同的逻辑用SubTree + Link（两种状态类型）方式，像函数一样提取为子树，逻辑不同的地方用参数加以区分。
+
+<img src="D:\Projects\NOTES\images\image-20260201180122473.png" alt="image-20260201180122473" style="zoom:50%;" />
+
+最终的LyraBot状态树
+<img src="D:\Projects\NOTES\images\image-20260201173739210.png" alt="image-20260201173739210" style="zoom:33%;" />
+
+
+
+#### 踩到的坑
+
+这一部分是本文的重点，也是学习一个系统/框架时花费精力最多的地方。希望可以给正在学习状态树的朋友提供一些有限的帮助，以免将时间花费到不必要的debug上。
+
+1. **问题**：如下一个“最简”StateTree，没有发生Tick。
+
+   <img src="D:\Projects\NOTES\images\image-20260127113752371.png" alt="image-20260127113752371" style="zoom: 50%;" />
+   **解决办法**：叶子状态必须有Task
+   **原因分析**：根据 StateTree 的调度机制，如果状态树 StartTree 后，激活状态（Root 或 Idle）中没有任何 Task、Transition 且未收到 Event，调度器判定当前没有需要处理的逻辑，便会在 **GetNextScheduledTick** 中将状态树置为 Sleep，导致后续 Tick 不再执行。
+
+   **进一步疑问**：Idle 状态明明配置了 Transition to Root，为什么没触发？
+   这是因为该 Transition 的触发条件是 OnStateCompleted。由于 Idle 状态内没有配置任何 Task，状态机无法从 Task 获得 Succeed 或 Failed 的执行结果，因此该状态默认保持 Running 状态。既然状态从未“完成”，OnStateCompleted 自然无法被触发》
+
+**StateTree 调度机制核心**
+在`StartTree`初始化那一帧的`Context.Start`以及之后的每帧`Context.Tick`【主体都为FStateTreeExecutionContext】之**后**，**GetNextScheduledTick** 函数决定当前状态树是否tick以及下次tick的时间。有四种返回值（判断优先级自上而下），对应情况如下：
+
+- EveryFrames(当前帧需要Tick）：
+  1. Schema配置为强制阻止整个调度机制（**IsScheduledTickAllowed**为false）
+  2. **全局任务请求**：如果 `StateTree` 资产配置为需要 Tick 全局任务（`DoesRequestTickGlobalTasks`），且当前有待处理事件。
+  3. 激活状态ActiveState有任务正在Tick（`DoesRequestTickTasks`）
+  4.  `ScheduledTickRequests`（一般为**DelayTask**） 设置了 `ShouldTickEveryFrames`
+  5. 零值 CustomTickRate：如果某个状态设置了 `CustomTickRate` 但其值为 `0.0f`（或负值），它会提升优先级至 EveryFrames
+- NextFrame（延迟到下一帧再Tick）：
+  1.  `ScheduledTickRequests` 中设置了`ShouldTickOnceNextFrame`的请求
+  2. 此时有**待处理转换**（TransitionRequests）
+  3. 队列中有**未处理事件** (Events)
+  4. **挂起的完成状态** (Pending Completed State)：如果有任务或状态已经标记为 `Completed`，需要下一帧触发后续的清理或转换逻辑。
+- CustomTickRate (自定义频率/延迟)
+  1. 状态节点配置了 `bHasCustomTickRate`。若多个状态都有，则取最小值
+  2. 如果有ScheduledTickRequests，且不为ShouldTickEveryFrames/ShouldTickOnceNextFrame，CustomTickRate设为该请求的TickRate和上面取最小值。
+  3. **延迟转换 (Delayed Transitions)**：当一个 Transition 设置了延迟时间（Delay），CustomTickRate设为剩余时间`TimeLeft`）和上面取的最小值。
+- Sleep（不触发Tick）
+  
+
+2. **状态树中没有行为树中的Service节点**
+
+   ![image-20260128213830741](D:\Projects\NOTES\images\image-20260128213830741.png)
+
+​	即没有像这样支持间隔时间执行的service task，需要自己实现，最后实现了一个cpp类：
+主要函数及重载：
+![image-20260201172218925](D:\Projects\NOTES\images\image-20260201172218925.png)
+
+数据结构：
+![image-20260201170546456](D:\Projects\NOTES\images\image-20260201170546456.png)
+
+而且目前引擎提供的RunEnvQuery任务有很多用起来不方便的地方：一是不支持蓝图继承（底层是结构体），二是Result参数绑定不到其他状态中，只能提升为全局参数，再把全局参数绑定到用到的地方（回归行为树了属于是）。 
+
+具体使用：
+![image-20260201173243060](D:\Projects\NOTES\images\image-20260201173243060.png)
+
+3. ”**Failed to select initial state**“报错
+
+   ![image-20260128230548109](D:\Projects\NOTES\images\image-20260128230548109.png)
+
+   <img src="D:\Projects\NOTES\images\image-20260128234654944.png" alt="image-20260128234654944" style="zoom:50%;" />
+
+在开发时时刻注意要像switch case一样留一个default case（可以为idle），以免状态树初始化时无法选择初始状态。
+
+这里其实还有一个**inactive parent state**的警告，原因是初始化时，任何state都不是Active的，当进行test conditions时会对source data进行拷贝验证，没有通过则会发出警告，代码如下，不言自明：
+
+![image-20260128232716713](D:\Projects\NOTES\images\image-20260128232716713.png)
+
+![image-20260128232720601](D:\Projects\NOTES\images\image-20260128232720601.png)
+
+但因为是警告而不是报错，所以可以忽略(bushi
+一种方法是将相关参数提升为 Global Parameter，从而绕过 Context 初始化的检查。不过个人感觉还是现在这种方法更加优雅和符合直觉。
+
+4. 把框架内建的RunEnvQuery Task作为像行为树中的Service节点那样，放在**非叶状态**中了。导致该RunEnvQuery的每帧触发StateComplete，进而导致持续性任务（下面的Moving）根本无法执行。
+
+   <img src="D:\Projects\NOTES\images\image-20260130000758591.png" alt="image-20260130000758591" style="zoom:50%;" />
+
+同理，自己写的Service节点放到非叶节点也要注意不要在内部触发**FinishTask**(succeed/failed)。
+如果逻辑需要必须触发，比如为了模拟Selector（见上文“重现步骤”），一定要检查清楚有没有子状态可能会被这个查询带来的FinishTask影响。比如我这里遇到了一个因为AI视野内找不到敌人，即DetectEnemy状态中以FinishTask(failed)结束，导致下面的SearchWeapon任务无法执行，进而导致每帧Moving的输入值都是坐标（0,0,0）
+<img src="D:\Projects\NOTES\images\image-20260130225328763.png" alt="image-20260130225328763" style="zoom:50%;" />
+
+5. 父状态逻辑被子状态“截胡”
+
+   这里需要特别注意 **Transition 的评估顺序**。StateTree 每帧检测 Transition 时是**自底向上（从叶子节点向根节点）**进行的。这意味着，处于激活链末端的子状态/叶状态定义的过渡条件拥有更高优先级。
+   如果子状态满足了某个过渡条件并发生了跳转，父状态的过渡条件甚至不会被评估。因此，如果必须在父状态（非叶节点）设置过渡，务必理清与子状态过渡条件的互斥关系。
+
+   <img src="D:\Projects\NOTES\images\image-20260130222310988.png" alt="image-20260130222310988" style="zoom: 50%;" />
+
+   
+
+
+
+#### 学习过程中学到的其他知识
+
+##### 通用EQS Task的实现
+
+![](D:\Projects\NOTES\images\image-20260128190332866.png)
+
+因为`RunEQS`后得到的返回结果中可能有Actor和Vector类型（以及对应的数组类型），为了支持这样的”泛型返回值“。在代码逻辑中用到`GetPtrTupleFromStrongExecutionContext`函数，它基于UE InstanceStruct（简单理解为支持多态的UStruct）、PropertyBinding/Ref（前者类似C++中的按值传递，后者类似按引用传递）等基建，能够在运行时，找到FStateTreePropertyRef变量内存对应的实际变量（如Actor）地址，并供这里的Task赋值。
+![image-20260128102317718](D:\Projects\NOTES\images\image-20260128102317718.png)
+
+但是正如前文所述，有很多使用不便的地方。
+
+
+
+##### 兼容蓝图类Task
+
+再比如，由于状态树框架内部的Task都是以`FStateTreeTaskBase`这样的结构体存储的，那么在编辑器中添加Task时，如何支持蓝图类（蓝图类一定是UClass）Task呢？
+
+查看源码发现为支持蓝图Task，有一个`UStateTreeTaskBlueprintBase`的U类，而它的旁边有一个以`FStateTreeTaskBase`为基类的`FStateTreeBlueprintTaskWrapper`，在ide中搜索相关引用发现，具体实现方式是这样的：
+
+从在编辑器中点击”Add Task“时开始，首先当我们选择`UStateTreeTaskBlueprintBase`的子类后，引擎内部通过下面的方式，即依赖FInstanceStruct的多态结构体特性，将Task对应的`FStateTreeEditorNode`的内部数据（FInstanceStruct类型）显式初始化成了`FStateTreeBlueprintTaskWrapper`，并在后续通过Wrapper中的EnterState、ExitState等方法转发到蓝图类的对应函数。
+
+总体来说，是一个适配器模式的很好应用。
+
+![](D:\Projects\NOTES\images\image-20260128194938490.png)
+
+![image-20260128190152267](D:\Projects\NOTES\images\image-20260128190152267.png)
+
+
+
+##### InstanceData数据模型相关
+
+发现在实现Task时，引擎内部采用将变量存放到一个FxxxInstanceData结构体中（如FStateTreeRunEnvQueryInstanceData）而不是直接放到Task类的成员变量中：
+
+![image-20260128194530859](D:\Projects\NOTES\images\image-20260128194530859.png)
+
+![image-20260128194551407](D:\Projects\NOTES\images\image-20260128194551407.png)
+
+原因类似[](UE.md#节点的单例问题)，除了解决**单例/多例问题**，还有支持**动态绑定**等好处。
+
+结构体类Task是如上定义的，那么蓝图类（U类）呢，答案仍是藏在之前说的`FStateTreeBlueprintTaskWrapper`中，
+
+<img src="D:\Projects\NOTES\images\image-20260128200553632.png" alt="image-20260128200553632" style="zoom:67%;" />
+
+虽然存的是UClass，但是显然，编辑器侧发现是UClass后会NewObject出来类实例，存储在InstanceObject中。
+
+<img src="D:\Projects\NOTES\images\image-20260128200923910.png" alt="image-20260128200923910" style="zoom: 50%;" />
+
+当然，InstanceData的最大好处是**内存连续性**：
+传统的行为树中，每个节点通常是一个独立的 UObject，这导致其成员变量分散在堆内存的各个角落，容易产生 Cache Miss。
+而状态树采用了数据与逻辑分离的设计。每个运行实例仅需持有一个 FStateTreeExecutionContext。其中的 **InstanceDataStorage** 是一块紧凑的连续内存，集中存放了编译期确定的所有数据（包含 Global Parameters、各 State 和 Task 的 InstanceData）。这种布局极大地提高了 CPU 缓存命中率，也是 StateTree 高性能的关键所在。
+
+![image-20260128202150438](D:\Projects\NOTES\images\image-20260128202150438.png)
 
 
 
 
+
+#### 目前状态树仍存在的问题
+
+1. 其次和其他AI系统如EQS**兼容性**不如行为树，比如EnvQueryContext中想要用状态树中的参数，目前只能通过在状态树逻辑中设置黑板值，再在Context中读黑板。因为目前StateTree框架中没有提供便利的数据读取相关接口。
+
+   ![image-20260129153047203](D:\Projects\NOTES\images\image-20260129153047203.png)
+
+​	当然如果有可行的解决方案，欢迎各路大佬现身评论区:)
+
+2. **打断关系**不好维护/实现（这也是我目前觉得最大的缺点），不像行为树有很直观的装饰器节点用于优先级+事件打断。状态树的打断应该只能通过为状态之间添加过渡条件来实现。而过渡本身机制需要我们时刻关注来自子状态的过渡条件和整个激活状态链上可能存在的任何Task（包括Global）的执行结果/是否调用FinishTask。本人就在实践过程中在这一点上修了好几个难查的bug。
+
+​	具体来说，比如根据下面的状态树，当敌人初始化时由于DetectEnemy的EQS还没运行完毕，于是进入到低优先级的SearchNew Weapon，但是如果此时有敌人就在脸上，AI就会仍然走到武器那里，直到触发当前Move To Task的State Complete后才会评估进入高优先级的Shoot。
+​	<img src="D:\Projects\NOTES\images\image-20260130202222869.png" alt="image-20260130202222869" style="zoom:50%;" />
+
+这一点最后我的解决方法是在这种长时间运行Task的叶子状态中加入OnTick/Event的跳转。一般OnTick检查Global Paramter，OnEvent则用事件解耦。
+
+##### 总结
+
+目前看来，如果只针对常见的游戏AI行为控制，行为树仍有很多不可替代的地方，比如方便的打断机制，和其他AI基建的兼容性等。
+
+但状态树相比行为树最大的优势还是在于
+
+1. **高性能**（数据在内存紧凑排布）。
+2. **数据安全性**：通过显式的 **Data Binding**（数据绑定）替代了行为树中隐式的全局黑板（Blackboard）读写，数据流向更清晰，不易出错。
+3. 表达一个完整的**状态**（包括子树【类似函数】的复用）的能力
+4. **通用性强**：StateTree 不仅限于 AI，还非常适合处理 **Game Logic** 或 **UI Flow**（如复杂的界面导航与状态切换）。这类逻辑如果强行用行为树表达会显得非常别扭，而状态机模型则天然契合。
 
 
 
@@ -734,7 +1085,7 @@ SScrollBox (this)          ← 外层控件，ChildSlot 只能挂 1 个孩子
 
 [](Ready\面试准备#Lyra#Gameplay框架)
 
-1. _EnhancedInput_ 框架：InputStack、InputMappingContext（优先级） TODO: InputAction 回调触发机制
+1. _EnhancedInput_ 框架：InputStack、InputMappingContext（优先级） InputAction 回调触发机制
 
 2. 引擎运行流程 [UE5 -- 引擎运行流程（从 main 到 BeginPlay）](https://zhuanlan.zhihu.com/p/577433224)
 
@@ -749,7 +1100,7 @@ SScrollBox (this)          ← 外层控件，ChildSlot 只能挂 1 个孩子
 [https://zhuanlan.zhihu.com/p/467236675]
 
 1. Lyra 中的 GameFeature:
-   GameMode -启动-> Experience -封装-> GameFeatureAction..(以及 PawnData)
+   GameMode -启动-> GameState上挂载ExperienceManagerComponent -> 加载Experience -封装-> GameFeatureAction..(以及 PawnData)
    
    
 
@@ -837,7 +1188,9 @@ SScrollBox (this)          ← 外层控件，ChildSlot 只能挂 1 个孩子
 
 
 
-## UObject
+## 类型系统（UObject）
+
+<img src="D:\Projects\NOTES\images\image-20260128094725848.png" alt="image-20260128094725848"  />
 
 ### 生成（UHT）
 
@@ -856,7 +1209,28 @@ Q&A:
 2. UObjectLoadAllCompiledInDefaultProperties真正构造UClass（OuterRegister）时如果UClass中包含了别的UClass属性不会有依赖问题吗？
    不会，之前已经有UObjectProcessRegistrants内部构造过一遍所有注册的UClass了
 
+### TObjectPtr
 
+不仅仅是“为了安全”，更主要的原因涉及 **编辑器性能（加载优化）** 和 **对象句柄抽象（Object Handle Abstraction）**。
+
+**资源加载**
+
+- **原始指针的问题**：
+  在 UE4 中，当你加载一个资源（比如一个 Blueprint 类）时，序列化器会读取该类引用的所有 UPROPERTY。如果是一个原始指针 UTexture* MyTex，引擎**必须**立刻找到并加载那个纹理，以便把内存地址填进指针里。
+  这会导致**级联加载（Cascading Load）**：加载 Asset A -> 触发加载 Asset B -> 触发加载 Asset C... 打开一个文件可能会导致半个项目的资源被强行加载到内存中。
+- **TObjectPtr 的解决方案**：
+  在编辑器（Editor）构建中，TObjectPtr 并不仅仅存一个内存地址。它能够存储一个 **“未解析的句柄（Handle）”** 或者 **“对象路径”**。
+  当序列化加载一个 Asset 时，TObjectPtr 可以保持“未解析”状态。**它知道它指向谁**，但它**没有真正加载那个对象**。只有当你**代码里第一次访问**它（例如调用 MyPtr->GetName()）时，它才会触发“解析（Resolve）”，此时才真正去加载对象并获取内存地址。
+
+**底层**
+
+**UnResolved**状态存的是
+
+- [ Handle ID (63 bits) ] + [ 1 (1 bit) ]
+- **存储内容**: 存储的是一个全局 **Object Handle ID**。
+- 用这个 Handle ID 去全局表（FObjectHandlePackageMap）里查，就能查到这个对象对应的 PackageName 和 ObjectName
+
+**Resolved** 状态存的就是对象在 RAM 中的64位物理地址
 
 
 
@@ -901,6 +1275,25 @@ Q&A:
 | 性能                       | 高                                                           | 较低                                           | 高（无额外分配）                                             |
 
 ---
+
+
+
+## PropertyBinding/Ref
+
+### PropertyBinding
+
+【可以理解为C++中的按**值**参数传递】
+
+一种**单向数据同步**机制。
+
+- Link：编辑器中通过绑定变量，记录源数据和目标数据的FPropertyBindingPath（理解为地址）
+- Runtime：在特定时机（如 状态树Exit State）用CopyProperty等函数将源数据的值**拷贝**到目标的成员变量中。
+
+### PropertyRef
+
+【可以理解为C++中的按**引用**参数传递】
+
+对应状态树框架中的FStateTreePropertyRef。不存储具体的值，而是存储一个**指向源数据地址的指针（或偏移信息）**。
 
 
 
