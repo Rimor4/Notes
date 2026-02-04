@@ -1,0 +1,8 @@
+{
+  "version": "2.0",
+  "mapping": {
+    "UE.md": "ue.md.json",
+    "Util/Markdown快捷键.md": "util_markdown快捷键.md.json"
+  },
+  "lastUpdated": 1770175748482
+}

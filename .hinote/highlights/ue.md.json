@@ -1,0 +1,21 @@
+{
+  "version": "2.0",
+  "lastModified": 1770175695787,
+  "highlights": {
+    "highlight-296843752-28070": {
+      "text": "方便的打断机制",
+      "position": 28070,
+      "created": 1770175650738,
+      "updated": 1770175695786,
+      "backgroundColor": "#ffeb3b",
+      "comments": [
+        {
+          "id": "comment-1770175650738-2tikcx6up",
+          "content": "状态树没有打断机制，强制你用状态机的思维去进行书写，这样真的能避免很多隐性 bug，强制你思考所有 corner case，而且解除了对 tick 的依赖。而非滥用行为树的观察者模式。",
+          "created": 1770175650738,
+          "updated": 1770175695786
+        }
+      ]
+    }
+  }
+}

@@ -1,5 +1,3 @@
-# UE 笔记
-
 ## 动画
 
 ### 动画更新流程
@@ -221,7 +219,7 @@
 
 主线程更新：
 
-<img src="D:\Projects\NOTES\images\v2-a1df1a24be903f7a4a3972fd67c7b603_1440w.jpg" alt="img" style="zoom:50%;" />
+![[v2-a1df1a24be903f7a4a3972fd67c7b603_1440w.jpg]]
 
 多线程更新：
 
@@ -231,11 +229,11 @@
 
 [[UnrealCircle深圳\]《黑神话：悟空》的Motion Matching | 游戏科学 招文勇_哔哩哔哩_bilibili](https://www.bilibili.com/video/BV1GK4y1S7Zw/)
 
-<img src="D:\Projects\NOTES\images\image-20251116115328799.png" alt="image-20251116115328799" style="zoom: 25%;" />
+![[image-20251116115328799.png]]
 
 
 
-### 【实践】预测IK
+### 【实践】脚部IK (Foot Placement + Predict)
 
 
 
@@ -385,14 +383,12 @@
    ```
 
 
-
-
-
 ### 状态树
 
 #### 初始化及Tick逻辑
 
-<img src="D:\Projects\NOTES\images\StateTree运行逻辑.png" alt="StateTree运行逻辑"  />						参考图来自：[[UOD2022\]从行为树到状态树 | Epic 周澄清_哔哩哔哩_bilibili](https://www.bilibili.com/video/BV1ed4y1b7Zk/)
+![[StateTree运行逻辑.png]]
+参考图来自：[[UOD2022\]从行为树到状态树 | Epic 周澄清_哔哩哔哩_bilibili](https://www.bilibili.com/video/BV1ed4y1b7Zk/)
 
 **一、 初始化流程（Initialization）**
 
@@ -422,21 +418,21 @@ StateTree 的 Tick 分为两个主要部分：数据更新/Task执行（**TickUp
 
    1.  MaxIterations次迭代，每次调用**TriggerTransitions**（内部检查顺序为**从叶到根**逆序）
 
-      ```cpp
-      bool FStateTreeExecutionContext::TriggerTransitions()
-      {
-      	//1. Process transition requests. Keep the single request with the highest priority.
-      	//2. Process tick/event/delegate transitions and tasks. TriggerTransitions, from bottom to top.
-      	// If delayed,
-      	//	If delayed completed, then process.
-      	//	Else add them to the delayed transition list.
-      	//3. If no transition, Process completion transitions, from bottom to top.
-      	//4. If transition occurs, check if there are any frame (sub-tree) that completed.
-      	...
-      }
-      ```
+  ```cpp
+  bool FStateTreeExecutionContext::TriggerTransitions()
+  {
+	//1. Process transition requests. Keep the single request with the highest priority.
+	//2. Process tick/event/delegate transitions and tasks. TriggerTransitions, from bottom to top.
+	// If delayed,
+	//	If delayed completed, then process.
+	//	Else add them to the delayed transition list.
+	//3. If no transition, Process completion transitions, from bottom to top.
+	//4. If transition occurs, check if there are any frame (sub-tree) that completed.
+	...
+  }
+  ```
 
-      内部调用**RequestTransitionInternal**，进一步在内部调用SelectState（转换到一个父状态（如 "Combat"）必须通过 `SelectState` 递归决定最终进入哪个叶子子状态（如 "Melee_Attack"））
+内部调用**RequestTransitionInternal**，进一步在内部调用SelectState（转换到一个父状态（如 "Combat"）必须通过 `SelectState` 递归决定最终进入哪个叶子子状态（如 "Melee_Attack"））
 
    2. 如成功过渡：
       - 调用Context的**ExitState**，内部从叶到根逆序调用Task的ExitState
@@ -648,13 +644,6 @@ C. **数据共享**：Blackboard vs. Data Bindings
 
 > Github仓库：https://github.com/Rimor4/LyraStarterGame/tree/StateTree
 
-#### 最终效果
-
-原行为树：
-[ST.gif]
-
-状态树：
-[ST.gif]
 
 #### 重现步骤
 
@@ -691,10 +680,10 @@ C. **数据共享**：Blackboard vs. Data Bindings
 1. 将多个状态简化、合并为一个，task可以聚合在同一个状态内部。
 2. 将大部分相同的逻辑用SubTree + Link（两种状态类型）方式，像函数一样提取为子树，逻辑不同的地方用参数加以区分。
 
-<img src="D:\Projects\NOTES\images\image-20260201180122473.png" alt="image-20260201180122473" style="zoom:50%;" />
+![[image-20260201180122473.png]]
 
 最终的LyraBot状态树
-<img src="D:\Projects\NOTES\images\image-20260201173739210.png" alt="image-20260201173739210" style="zoom:33%;" />
+![[image-20260201173739210.png]]
 
 
 
@@ -704,7 +693,7 @@ C. **数据共享**：Blackboard vs. Data Bindings
 
 1. **问题**：如下一个“最简”StateTree，没有发生Tick。
 
-   <img src="D:\Projects\NOTES\images\image-20260127113752371.png" alt="image-20260127113752371" style="zoom: 50%;" />
+   ![[image-20260127113752371.png]]
    **解决办法**：叶子状态必须有Task
    **原因分析**：根据 StateTree 的调度机制，如果状态树 StartTree 后，激活状态（Root 或 Idle）中没有任何 Task、Transition 且未收到 Event，调度器判定当前没有需要处理的逻辑，便会在 **GetNextScheduledTick** 中将状态树置为 Sleep，导致后续 Tick 不再执行。
 
@@ -752,7 +741,7 @@ C. **数据共享**：Blackboard vs. Data Bindings
 
    ![image-20260128230548109](D:\Projects\NOTES\images\image-20260128230548109.png)
 
-   <img src="D:\Projects\NOTES\images\image-20260128234654944.png" alt="image-20260128234654944" style="zoom:50%;" />
+   ![[image-20260128234654944.png]]
 
 在开发时时刻注意要像switch case一样留一个default case（可以为idle），以免状态树初始化时无法选择初始状态。
 
@@ -767,18 +756,18 @@ C. **数据共享**：Blackboard vs. Data Bindings
 
 4. 把框架内建的RunEnvQuery Task作为像行为树中的Service节点那样，放在**非叶状态**中了。导致该RunEnvQuery的每帧触发StateComplete，进而导致持续性任务（下面的Moving）根本无法执行。
 
-   <img src="D:\Projects\NOTES\images\image-20260130000758591.png" alt="image-20260130000758591" style="zoom:50%;" />
+   ![[image-20260130000758591.png]]
 
 同理，自己写的Service节点放到非叶节点也要注意不要在内部触发**FinishTask**(succeed/failed)。
 如果逻辑需要必须触发，比如为了模拟Selector（见上文“重现步骤”），一定要检查清楚有没有子状态可能会被这个查询带来的FinishTask影响。比如我这里遇到了一个因为AI视野内找不到敌人，即DetectEnemy状态中以FinishTask(failed)结束，导致下面的SearchWeapon任务无法执行，进而导致每帧Moving的输入值都是坐标（0,0,0）
-<img src="D:\Projects\NOTES\images\image-20260130225328763.png" alt="image-20260130225328763" style="zoom:50%;" />
+![[image-20260130225328763.png]]
 
 5. 父状态逻辑被子状态“截胡”
 
    这里需要特别注意 **Transition 的评估顺序**。StateTree 每帧检测 Transition 时是**自底向上（从叶子节点向根节点）**进行的。这意味着，处于激活链末端的子状态/叶状态定义的过渡条件拥有更高优先级。
    如果子状态满足了某个过渡条件并发生了跳转，父状态的过渡条件甚至不会被评估。因此，如果必须在父状态（非叶节点）设置过渡，务必理清与子状态过渡条件的互斥关系。
 
-   <img src="D:\Projects\NOTES\images\image-20260130222310988.png" alt="image-20260130222310988" style="zoom: 50%;" />
+   ![[image-20260130222310988.png]]
 
    
 
@@ -825,11 +814,11 @@ C. **数据共享**：Blackboard vs. Data Bindings
 
 结构体类Task是如上定义的，那么蓝图类（U类）呢，答案仍是藏在之前说的`FStateTreeBlueprintTaskWrapper`中，
 
-<img src="D:\Projects\NOTES\images\image-20260128200553632.png" alt="image-20260128200553632" style="zoom:67%;" />
+![[image-20260128200553632.png]]
 
 虽然存的是UClass，但是显然，编辑器侧发现是UClass后会NewObject出来类实例，存储在InstanceObject中。
 
-<img src="D:\Projects\NOTES\images\image-20260128200923910.png" alt="image-20260128200923910" style="zoom: 50%;" />
+![[image-20260128200923910.png]]
 
 当然，InstanceData的最大好处是**内存连续性**：
 传统的行为树中，每个节点通常是一个独立的 UObject，这导致其成员变量分散在堆内存的各个角落，容易产生 Cache Miss。
@@ -852,13 +841,13 @@ C. **数据共享**：Blackboard vs. Data Bindings
 2. **打断关系**不好维护/实现（这也是我目前觉得最大的缺点），不像行为树有很直观的装饰器节点用于优先级+事件打断。状态树的打断应该只能通过为状态之间添加过渡条件来实现。而过渡本身机制需要我们时刻关注来自子状态的过渡条件和整个激活状态链上可能存在的任何Task（包括Global）的执行结果/是否调用FinishTask。本人就在实践过程中在这一点上修了好几个难查的bug。
 
 ​	具体来说，比如根据下面的状态树，当敌人初始化时由于DetectEnemy的EQS还没运行完毕，于是进入到低优先级的SearchNew Weapon，但是如果此时有敌人就在脸上，AI就会仍然走到武器那里，直到触发当前Move To Task的State Complete后才会评估进入高优先级的Shoot。
-​	<img src="D:\Projects\NOTES\images\image-20260130202222869.png" alt="image-20260130202222869" style="zoom:50%;" />
+​	![[image-20260130202222869.png]]
 
 这一点最后我的解决方法是在这种长时间运行Task的叶子状态中加入OnTick/Event的跳转。一般OnTick检查Global Paramter，OnEvent则用事件解耦。
 
 ##### 总结
 
-目前看来，如果只针对常见的游戏AI行为控制，行为树仍有很多不可替代的地方，比如方便的打断机制，和其他AI基建的兼容性等。
+目前看来，如果只针对常见的游戏AI行为控制，行为树仍有很多不可替代的地方，比如==方便的打断机制==，和其他AI基建的兼容性等。
 
 但状态树相比行为树最大的优势还是在于
 
@@ -1000,7 +989,7 @@ GAS 使用一种“同步令牌”机制。当客户端尝试启动一个技能�
 
 ### 点击流程
 
-<img src="D:\Projects\NOTES\images\IMG_20251115-153540054.png" alt="picture 0" style="zoom: 67%;" />  
+![[IMG_20251115-153540054.png]]  
 
 - PreviewMouseButtonDown 阶段
   从路径第 0 个元素开始往后遍历，依次调用 Root → Panel A → Button B 的 OnPreviewMouseButtonDown。
@@ -1116,7 +1105,7 @@ SScrollBox (this)          ← 外层控件，ChildSlot 只能挂 1 个孩子
 
 ### Lyra 动画模块
 
-1. 模块化动画: 同种动画状态，但状态内容不同时，如何解耦不同的状态内容（使用**动画层**解耦）<img src="D:\Projects\NOTES\images\v2-7a66f1bf107eb0ec877d5644a04c02d0_r.jpg" alt="img" style="zoom: 50%;" />
+1. 模块化动画: 同种动画状态，但状态内容不同时，如何解耦不同的状态内容（使用**动画层**解耦）![[v2-7a66f1bf107eb0ec877d5644a04c02d0_r.jpg]]
 
    LinkAnimClassLayers函数:
    	利用反射机制将原始蓝图上的LinkNode指向目标蓝图上相同的LinkNode，然后在更新时进行跳转即可。
@@ -1155,7 +1144,7 @@ SScrollBox (this)          ← 外层控件，ChildSlot 只能挂 1 个孩子
 
    **Orientation Warping**
 
-   <img src="D:\Projects\NOTES\images\image-20260115233909829.png" alt="image-20260115233909829" style="zoom: 67%;" />
+   ![[image-20260115233909829.png]]
 
    
 
@@ -1190,7 +1179,7 @@ SScrollBox (this)          ← 外层控件，ChildSlot 只能挂 1 个孩子
 
 ## 类型系统（UObject）
 
-<img src="D:\Projects\NOTES\images\image-20260128094725848.png" alt="image-20260128094725848"  />
+![[image-20260128094725848.png]]
 
 ### 生成（UHT）
 
@@ -1238,21 +1227,21 @@ Q&A:
 
 **SharedReferenceCount（强引用）** 和 **WeakReferenceCount（弱引用）** 在 **UE 智能指针体系（FSharedRef / FSharedPtr / TWeakPtr）** 中的**典型操作**“变化表”： 
 
-| 操作                     | 对象类型     | SharedRefCount变化 | WeakRefCount变化 | 备注                                             |
-| ------------------------ | ------------ | ------------------ | ---------------- | ------------------------------------------------ |
-| `TSharedPtr`构造         | 新控制器     | **+1**             | **+1**           | 强引用诞生时弱引用也必须存在，以便后续弱指针查询 |
-| `TSharedPtr`拷贝构造     | 已有控制器   | **+1**             | 不变             | 仅增加强引用                                     |
-| `TSharedPtr`赋值(`=`)    | 已有控制器   | 旧-1 / 新+1        | 不变             | 先Add新再Release旧，顺序见前回答                 |
-| `TSharedPtr`销毁         | 任意         | **-1**             | 不变             | 当减到0时立即**析构对象**，但控制器本身还活着    |
-| 最后一个`TSharedPtr`销毁 | 控制器       | **-1→0**           | 不变             | 对象已析构；控制器等待弱引用归零                 |
-| `TWeakPtr`构造           | 已有控制器   | 不变               | **+1**           | 纯弱引用                                         |
-| `TWeakPtr`拷贝/赋值      | 已有控制器   | 不变               | **+1**           | 仅弱引用计数变化                                 |
-| `TWeakPtr`销毁           | 任意         | 不变               | **-1**           | 当弱引用也归零→**释放控制器内存**                |
-| `TWeakPtr::Pin()`成功    | 已有控制器   | **+1**             | 不变             | 临时提升为`TSharedPtr`                           |
-| `TWeakPtr::Pin()`失败    | 控制器已失效 | 不变               | 不变             | 返回空指针                                       |
-| `TSharedPtr::Reset()`    | 任意         | **-1**             | 不变             | 手动置空                                         |
-| `TSharedRef`构造         | 新控制器     | **+1**             | **+1**           | 与`TSharedPtr`相同，但不可为空                   |
-| `TSharedRef`拷贝         | 已有控制器   | **+1**             | 不变             | 同`TSharedPtr`                                   |
+| 操作                    | 对象类型   | SharedRefCount变化 | WeakRefCount变化 | 备注                        |
+| --------------------- | ------ | ---------------- | -------------- | ------------------------- |
+| `TSharedPtr`构造        | 新控制器   | **+1**           | **+1**         | 强引用诞生时弱引用也必须存在，以便后续弱指针查询  |
+| `TSharedPtr`拷贝构造      | 已有控制器  | **+1**           | 不变             | 仅增加强引用                    |
+| `TSharedPtr`赋值(`=`)   | 已有控制器  | 旧-1 / 新+1        | 不变             | 先Add新再Release旧，顺序见前回答     |
+| `TSharedPtr`销毁        | 任意     | **-1**           | 不变             | 当减到0时立即**析构对象**，但控制器本身还活着 |
+| 最后一个`TSharedPtr`销毁    | 控制器    | **-1→0**         | 不变             | 对象已析构；控制器等待弱引用归零          |
+| `TWeakPtr`构造          | 已有控制器  | 不变               | **+1**         | 纯弱引用                      |
+| `TWeakPtr`拷贝/赋值       | 已有控制器  | 不变               | **+1**         | 仅弱引用计数变化                  |
+| `TWeakPtr`销毁          | 任意     | 不变               | **-1**         | 当弱引用也归零→**释放控制器内存**       |
+| `TWeakPtr::Pin()`成功   | 已有控制器  | **+1**           | 不变             | 临时提升为`TSharedPtr`         |
+| `TWeakPtr::Pin()`失败   | 控制器已失效 | 不变               | 不变             | 返回空指针                     |
+| `TSharedPtr::Reset()` | 任意     | **-1**           | 不变             | 手动置空                      |
+| `TSharedRef`构造        | 新控制器   | **+1**           | **+1**         | 与`TSharedPtr`相同，但不可为空     |
+| `TSharedRef`拷贝        | 已有控制器  | **+1**           | 不变             | 同`TSharedPtr`             |
 
 ---
 
@@ -1299,5 +1288,6 @@ Q&A:
 
 ## 调试
 
-[](https://www.bilibili.com/video/BV1iQ4y1j73A/)
-[](https://www.bilibili.com/video/BV1st46z6ECv/) 
+[[UFSH2023]总有一个你不知道的虚幻引擎调试技巧 | 陈拓 Epic Games_哔哩哔哩_bilibili](https://www.bilibili.com/video/BV1iQ4y1j73A/)
+[[UFSH2025]超越PrintString: 虚幻引擎调试工具 | Matt oztalay Epic Games 开发者关系高级 TA(官方字幕)_哔哩哔哩_bilibili](https://www.bilibili.com/video/BV1st46z6ECv/)
+
