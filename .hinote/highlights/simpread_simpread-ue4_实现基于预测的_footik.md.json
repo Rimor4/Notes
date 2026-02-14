@@ -1,0 +1,21 @@
+{
+  "version": "2.0",
+  "lastModified": 1770180496207,
+  "highlights": {
+    "highlight-1254625448-1646": {
+      "text": "脚步的触地",
+      "position": 1646,
+      "created": 1770178109272,
+      "updated": 1770180496207,
+      "backgroundColor": "#ffeb3b",
+      "comments": [
+        {
+          "id": "comment-1770178109272-70zfgjd9p",
+          "content": "Foot Placement 中是否已经有计算了",
+          "created": 1770178109272,
+          "updated": 1770180496207
+        }
+      ]
+    }
+  }
+}

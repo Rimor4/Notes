@@ -6,11 +6,11 @@
     "emojiStyle": "native",
     "iconColor": null,
     "recentlyUsedIcons": [
+      "LiFolderSymlink",
+      "LiFolderInput",
+      "LiFolderCode",
       "LiBookOpen",
-      "LiHammer",
-      "LiArchiveX",
-      "LiBook",
-      "LiImages"
+      "LiHammer"
     ],
     "recentlyUsedIconsSize": 5,
     "rules": [],
@@ -34,11 +34,12 @@
     "debugMode": false,
     "useInternalPlugins": false
   },
-  "Project": "LiFolderClosed",
+  "Project": "LiFolderCode",
   "Interview": "LiUserCheck2",
   "images": "LiImages",
   "Book": "LiBook",
   "Archive": "LiArchiveX",
   "Util": "LiHammer",
-  "Course": "LiBookOpen"
+  "Course": "LiBookOpen",
+  "SimpRead": "LiFolderSymlink"
 }

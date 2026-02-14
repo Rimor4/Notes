@@ -1,0 +1,36 @@
+{
+  "version": "2.0",
+  "lastModified": 1770618601302,
+  "highlights": {
+    "highlight-1153627184-1429": {
+      "text": "PelvisHeightMode",
+      "position": 1429,
+      "created": 1770180955036,
+      "updated": 1770180955036,
+      "backgroundColor": "#ffeb3b",
+      "comments": [
+        {
+          "id": "comment-1770180955036-wzwf7q0bp",
+          "content": "查看源码",
+          "created": 1770180955036,
+          "updated": 1770180955036
+        }
+      ]
+    },
+    "highlight-66794435-1615": {
+      "text": "LockType",
+      "position": 1615,
+      "created": 1770180976227,
+      "updated": 1770618601302,
+      "backgroundColor": "#ffeb3b",
+      "comments": [
+        {
+          "id": "comment-1770180976227-h5jfffag6",
+          "content": "查看源码\n以及其他关键参数影响据设置的锁定方式",
+          "created": 1770180976227,
+          "updated": 1770618601302
+        }
+      ]
+    }
+  }
+}

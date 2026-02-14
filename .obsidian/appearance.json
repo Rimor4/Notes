@@ -1,3 +1,5 @@
 {
-  "cssTheme": "GitHub Theme"
+  "cssTheme": "GitHub Theme",
+  "monospaceFontFamily": "JetBrainsMono Nerd Font Mono",
+  "baseFontSize": 16
 }

@@ -219,21 +219,69 @@
 
 主线程更新：
 
-![[v2-a1df1a24be903f7a4a3972fd67c7b603_1440w.jpg]]
+![[v2-a1df1a24be903f7a4a3972fd67c7b603_1440w.jpg|875]]
 
 多线程更新：
 
-![img](D:\Projects\NOTES\images\v2-a9daf51b9c51669807a691be79ea4a51_r.jpg)
+![img|2600](D:\Projects\NOTES\images\v2-a9daf51b9c51669807a691be79ea4a51_r.jpg)
 
 
 
 [[UnrealCircle深圳\]《黑神话：悟空》的Motion Matching | 游戏科学 招文勇_哔哩哔哩_bilibili](https://www.bilibili.com/video/BV1GK4y1S7Zw/)
 
-![[image-20251116115328799.png]]
+![[image-20251116115328799.png|625]]
+
+
+
+### ALS
+
+#### 动画叠加
+![[Pasted image 20260212123126.png|800]]
+
+#### 八向移动 （Standing -> Movement States）
+
+状态机中表达“移动意图“
+![[Pasted image 20260213183550.png|625]]
+具体的状态内部根据弹簧插值后的前后左右四个方向的速度Amount来求值四个对于当前意图合适的动画序列。
+这里的”对于当前意图合适“意思是要保证角色胸部朝向大致相同。
+如这里的MLF状态内部的 四个速度方向-动画序列对分别为：
+W：前进动画
+A：胸部**朝左**的左移动画
+S：后退动画
+D：背部朝右（胸部也是**朝左**）的右移动画
+注：表达MoveLeftForward的动画并不是真的有向左前方移动的动画，而是胸部朝左前方的左移动画
+![[Pasted image 20260213183848.png]]
+
+#### 停步
+##### FootLock部分
+
+- ALS `RefreshFootLock`函数 
+	**策略**：允许脚平滑地 **退出** 锁定，但 **进入** 锁定时必须是瞬间捕捉
+	![[Pasted image 20260213205230.png]]
+	具体来说，这里进入锁定时有两种：
+	1. Lock Foot (锁定脚) —— “原地固定”
+		- **适用场景**：当你停止移动时，那只脚**已经处于触地状态**。
+		- **内部逻辑**：
+		    - 它直接使用了 Use cached pose 'Movement Details'（即当前的动态运动姿势）。
+		    - 它**没有**去搜寻新的动画帧，只是简单地通过 Modify Curve 把锁定曲线拉满。
+		- **目的**：既然脚已经在地上，那就别动了。它告诉 IK 系统：**“以当前这一帧脚在世界空间的位置为准，死死钉在地上，防止在播放停止过渡动画时脚底打滑（Foot Sliding）。”**
+	2.  Plant Foot (落脚/植入脚) —— “强制落地”
+		- **适用场景**：当你停止移动时，那只脚**正处于腾空阶段（Swing Phase）**。
+		- **内部逻辑**：
+		    - 你会发现这里非常复杂。它使用了多个 Sequence Evaluator（序列评估器），并且设置了 Explicit Frame（明确的帧数，例如图中的第 4 帧、第 6 帧等）。
+		    - **原理**：它从走路或跑步的动画序列中，精确提取出该足部**最适合落地的那个瞬间的姿势帧**（实际上是FootPlanted曲线刚开始为1/-1时的那帧，即落脚帧）。
+		    - 它根据角色停止前的方向（前、后、左、右）进行混合，计算出一个“理想的落脚姿势”。
+		    - 通过 Layered blend per bone（骨骼分层混合），它只把这个“落脚的腿部姿势”融合进当前的全身姿势中。
+		- **目的**：因为它在空中，如果直接锁定会显得非常僵硬或浮空。所以它**强制动画进入“落地帧”**，补全那个踩下去的动作，然后再告诉 IK 系统：“现在脚踩实了，钉住别动。
+
+
+- 而Lyra直接在`FootPlacement`节点中根据脚部离地距离和速度来判断是否需要启动脚锁
 
 
 
 ### 【实践】脚部IK (Foot Placement + Predict)
+问题：
+1. Footplacement下是否还需要数据预处理
 
 
 
@@ -387,7 +435,7 @@
 
 #### 初始化及Tick逻辑
 
-![[StateTree运行逻辑.png]]
+![[StateTree运行逻辑.png|1000]]
 参考图来自：[[UOD2022\]从行为树到状态树 | Epic 周澄清_哔哩哔哩_bilibili](https://www.bilibili.com/video/BV1ed4y1b7Zk/)
 
 **一、 初始化流程（Initialization）**
@@ -680,10 +728,10 @@ C. **数据共享**：Blackboard vs. Data Bindings
 1. 将多个状态简化、合并为一个，task可以聚合在同一个状态内部。
 2. 将大部分相同的逻辑用SubTree + Link（两种状态类型）方式，像函数一样提取为子树，逻辑不同的地方用参数加以区分。
 
-![[image-20260201180122473.png]]
+![[image-20260201180122473.png|500]]
 
 最终的LyraBot状态树
-![[image-20260201173739210.png]]
+![[image-20260201173739210.png|550]]
 
 
 
@@ -693,7 +741,7 @@ C. **数据共享**：Blackboard vs. Data Bindings
 
 1. **问题**：如下一个“最简”StateTree，没有发生Tick。
 
-   ![[image-20260127113752371.png]]
+   ![[image-20260127113752371.png|875]]
    **解决办法**：叶子状态必须有Task
    **原因分析**：根据 StateTree 的调度机制，如果状态树 StartTree 后，激活状态（Root 或 Idle）中没有任何 Task、Transition 且未收到 Event，调度器判定当前没有需要处理的逻辑，便会在 **GetNextScheduledTick** 中将状态树置为 Sleep，导致后续 Tick 不再执行。
 
@@ -723,14 +771,14 @@ C. **数据共享**：Blackboard vs. Data Bindings
 
 2. **状态树中没有行为树中的Service节点**
 
-   ![image-20260128213830741](D:\Projects\NOTES\images\image-20260128213830741.png)
+   ![image-20260128213830741|700](D:\Projects\NOTES\images\image-20260128213830741.png)
 
 ​	即没有像这样支持间隔时间执行的service task，需要自己实现，最后实现了一个cpp类：
 主要函数及重载：
-![image-20260201172218925](D:\Projects\NOTES\images\image-20260201172218925.png)
+![image-20260201172218925|925](D:\Projects\NOTES\images\image-20260201172218925.png)
 
 数据结构：
-![image-20260201170546456](D:\Projects\NOTES\images\image-20260201170546456.png)
+![image-20260201170546456|925](D:\Projects\NOTES\images\image-20260201170546456.png)
 
 而且目前引擎提供的RunEnvQuery任务有很多用起来不方便的地方：一是不支持蓝图继承（底层是结构体），二是Result参数绑定不到其他状态中，只能提升为全局参数，再把全局参数绑定到用到的地方（回归行为树了属于是）。 
 
@@ -741,7 +789,7 @@ C. **数据共享**：Blackboard vs. Data Bindings
 
    ![image-20260128230548109](D:\Projects\NOTES\images\image-20260128230548109.png)
 
-   ![[image-20260128234654944.png]]
+   ![[image-20260128234654944.png|500]]
 
 在开发时时刻注意要像switch case一样留一个default case（可以为idle），以免状态树初始化时无法选择初始状态。
 
@@ -749,25 +797,25 @@ C. **数据共享**：Blackboard vs. Data Bindings
 
 ![image-20260128232716713](D:\Projects\NOTES\images\image-20260128232716713.png)
 
-![image-20260128232720601](D:\Projects\NOTES\images\image-20260128232720601.png)
+![image-20260128232720601|850](D:\Projects\NOTES\images\image-20260128232720601.png)
 
 但因为是警告而不是报错，所以可以忽略(bushi
 一种方法是将相关参数提升为 Global Parameter，从而绕过 Context 初始化的检查。不过个人感觉还是现在这种方法更加优雅和符合直觉。
 
 4. 把框架内建的RunEnvQuery Task作为像行为树中的Service节点那样，放在**非叶状态**中了。导致该RunEnvQuery的每帧触发StateComplete，进而导致持续性任务（下面的Moving）根本无法执行。
 
-   ![[image-20260130000758591.png]]
+   ![[image-20260130000758591.png|425]]
 
 同理，自己写的Service节点放到非叶节点也要注意不要在内部触发**FinishTask**(succeed/failed)。
 如果逻辑需要必须触发，比如为了模拟Selector（见上文“重现步骤”），一定要检查清楚有没有子状态可能会被这个查询带来的FinishTask影响。比如我这里遇到了一个因为AI视野内找不到敌人，即DetectEnemy状态中以FinishTask(failed)结束，导致下面的SearchWeapon任务无法执行，进而导致每帧Moving的输入值都是坐标（0,0,0）
-![[image-20260130225328763.png]]
+![[image-20260130225328763.png|450]]
 
 5. 父状态逻辑被子状态“截胡”
 
    这里需要特别注意 **Transition 的评估顺序**。StateTree 每帧检测 Transition 时是**自底向上（从叶子节点向根节点）**进行的。这意味着，处于激活链末端的子状态/叶状态定义的过渡条件拥有更高优先级。
    如果子状态满足了某个过渡条件并发生了跳转，父状态的过渡条件甚至不会被评估。因此，如果必须在父状态（非叶节点）设置过渡，务必理清与子状态过渡条件的互斥关系。
 
-   ![[image-20260130222310988.png]]
+   ![[image-20260130222310988.png|600]]
 
    
 
@@ -814,11 +862,11 @@ C. **数据共享**：Blackboard vs. Data Bindings
 
 结构体类Task是如上定义的，那么蓝图类（U类）呢，答案仍是藏在之前说的`FStateTreeBlueprintTaskWrapper`中，
 
-![[image-20260128200553632.png]]
+![[image-20260128200553632.png|550]]
 
 虽然存的是UClass，但是显然，编辑器侧发现是UClass后会NewObject出来类实例，存储在InstanceObject中。
 
-![[image-20260128200923910.png]]
+![[image-20260128200923910.png|875]]
 
 当然，InstanceData的最大好处是**内存连续性**：
 传统的行为树中，每个节点通常是一个独立的 UObject，这导致其成员变量分散在堆内存的各个角落，容易产生 Cache Miss。
@@ -834,14 +882,14 @@ C. **数据共享**：Blackboard vs. Data Bindings
 
 1. 其次和其他AI系统如EQS**兼容性**不如行为树，比如EnvQueryContext中想要用状态树中的参数，目前只能通过在状态树逻辑中设置黑板值，再在Context中读黑板。因为目前StateTree框架中没有提供便利的数据读取相关接口。
 
-   ![image-20260129153047203](D:\Projects\NOTES\images\image-20260129153047203.png)
+   ![image-20260129153047203|975](D:\Projects\NOTES\images\image-20260129153047203.png)
 
 ​	当然如果有可行的解决方案，欢迎各路大佬现身评论区:)
 
 2. **打断关系**不好维护/实现（这也是我目前觉得最大的缺点），不像行为树有很直观的装饰器节点用于优先级+事件打断。状态树的打断应该只能通过为状态之间添加过渡条件来实现。而过渡本身机制需要我们时刻关注来自子状态的过渡条件和整个激活状态链上可能存在的任何Task（包括Global）的执行结果/是否调用FinishTask。本人就在实践过程中在这一点上修了好几个难查的bug。
 
 ​	具体来说，比如根据下面的状态树，当敌人初始化时由于DetectEnemy的EQS还没运行完毕，于是进入到低优先级的SearchNew Weapon，但是如果此时有敌人就在脸上，AI就会仍然走到武器那里，直到触发当前Move To Task的State Complete后才会评估进入高优先级的Shoot。
-​	![[image-20260130202222869.png]]
+​	![[image-20260130202222869.png|500]]
 
 这一点最后我的解决方法是在这种长时间运行Task的叶子状态中加入OnTick/Event的跳转。一般OnTick检查Global Paramter，OnEvent则用事件解耦。
 
@@ -886,6 +934,7 @@ PlayerState初始化/动态根据GameFeature添加 `GiveAbility`，内部注册�
 **GE流程**
 
 GE可以通过GrantedAbility赋予角色GA，再通过添加/移除Tag来自动触发GA
+
 
 GE: UGameplayEffectComponent通过注册 `AllowGameplayEffectApplication` 函数来通过GameplayEffectQuery来实现自定义的复杂过滤逻辑
 
@@ -989,7 +1038,7 @@ GAS 使用一种“同步令牌”机制。当客户端尝试启动一个技能�
 
 ### 点击流程
 
-![[IMG_20251115-153540054.png]]  
+![[IMG_20251115-153540054.png|450]]  
 
 - PreviewMouseButtonDown 阶段
   从路径第 0 个元素开始往后遍历，依次调用 Root → Panel A → Button B 的 OnPreviewMouseButtonDown。
@@ -1105,7 +1154,7 @@ SScrollBox (this)          ← 外层控件，ChildSlot 只能挂 1 个孩子
 
 ### Lyra 动画模块
 
-1. 模块化动画: 同种动画状态，但状态内容不同时，如何解耦不同的状态内容（使用**动画层**解耦）![[v2-7a66f1bf107eb0ec877d5644a04c02d0_r.jpg]]
+1. 模块化动画: 同种动画状态，但状态内容不同时，如何解耦不同的状态内容（使用**动画层**解耦）![[v2-7a66f1bf107eb0ec877d5644a04c02d0_r.jpg|875]]
 
    LinkAnimClassLayers函数:
    	利用反射机制将原始蓝图上的LinkNode指向目标蓝图上相同的LinkNode，然后在更新时进行跳转即可。
@@ -1144,7 +1193,7 @@ SScrollBox (this)          ← 外层控件，ChildSlot 只能挂 1 个孩子
 
    **Orientation Warping**
 
-   ![[image-20260115233909829.png]]
+   ![[image-20260115233909829.png|800]]
 
    
 
@@ -1179,7 +1228,7 @@ SScrollBox (this)          ← 外层控件，ChildSlot 只能挂 1 个孩子
 
 ## 类型系统（UObject）
 
-![[image-20260128094725848.png]]
+![[image-20260128094725848.png|500]]
 
 ### 生成（UHT）
 
