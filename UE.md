@@ -279,10 +279,18 @@ D：背部朝右（胸部也是**朝左**）的右移动画
 
 
 
+
+### IK
+
+#### BasicIK
+
+**Primary Axis**：骨骼是沿着哪个轴生长的（refpose时）
+**Secondary Axis**：手肘的自然弯曲方向（refpose时）
+Joint Target Location（**Pole Vector**）: ik后手肘弯曲的方向（和Root、Effector共同决定弯曲平面）
+
 ### 【实践】脚部IK (Foot Placement + Predict)
 问题：
 1. Footplacement下是否还需要数据预处理
-
 
 
 

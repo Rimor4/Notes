@@ -6,11 +6,11 @@
     "emojiStyle": "native",
     "iconColor": null,
     "recentlyUsedIcons": [
+      "LiFiles",
       "LiFolderSymlink",
       "LiFolderInput",
       "LiFolderCode",
-      "LiBookOpen",
-      "LiHammer"
+      "LiBookOpen"
     ],
     "recentlyUsedIconsSize": 5,
     "rules": [],
@@ -41,5 +41,6 @@
   "Archive": "LiArchiveX",
   "Util": "LiHammer",
   "Course": "LiBookOpen",
-  "SimpRead": "LiFolderSymlink"
+  "SimpRead": "LiFolderSymlink",
+  "Templates": "LiFiles"
 }

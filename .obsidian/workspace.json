@@ -40,35 +40,21 @@
             }
           },
           {
-            "id": "2373aa460b5ccbc8",
+            "id": "22b84310e7bf6a52",
             "type": "leaf",
             "state": {
               "type": "markdown",
               "state": {
-                "file": "SimpRead/UE5 动画技术详解 - FootPlacement.md",
-                "mode": "source",
+                "file": "Project/My Single-player Games in Life/文本数据/汪达与巨像.md",
+                "mode": "preview",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "UE5 动画技术详解 - FootPlacement"
-            }
-          },
-          {
-            "id": "6a105117cc391223",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "SimpRead/【UE5】预测脚步 IK 实现 - PredictFootIK.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "【UE5】预测脚步 IK 实现 - PredictFootIK"
+              "title": "汪达与巨像"
             }
           }
         ],
-        "currentTab": 1
+        "currentTab": 2
       }
     ],
     "direction": "vertical"
@@ -100,13 +86,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "UE.md",
+                "file": "Project/My Single-player Games in Life/文本数据/汪达与巨像.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "UE 的大纲"
+              "title": "汪达与巨像 的大纲"
             }
           },
           {
@@ -136,12 +122,11 @@
               "title": "书签"
             }
           }
-        ],
-        "currentTab": 1
+        ]
       }
     ],
     "direction": "horizontal",
-    "width": 287.5
+    "width": 270.5
   },
   "right": {
     "id": "bf445b101996deb2",
@@ -229,7 +214,8 @@
       }
     ],
     "direction": "horizontal",
-    "width": 300
+    "width": 300,
+    "collapsed": true
   },
   "left-ribbon": {
     "hiddenItems": {
@@ -239,36 +225,58 @@
       "graph:查看关系图谱": false,
       "daily-notes:打开/创建今天的日记": false,
       "canvas:新建白板": false,
-      "hi-note:HiNote": false
+      "hi-note:HiNote": false,
+      "templates:插入模板": false
     }
   },
-  "active": "45220e5a1f1b039e",
+  "active": "22b84310e7bf6a52",
   "lastOpenFiles": [
-    "SimpRead/UE5 动画技术详解 - FootPlacement.md",
-    "SimpRead/UE5 骨骼动画 停步方案探讨（已完结）.md",
-    "UE.md",
-    "Windows端好用工具软件推荐.md",
-    "images/Pasted image 20260213205230.png",
-    "images/Pasted image 20260213183848.png",
-    "images/Pasted image 20260213183550.png",
-    "images/Pasted image 20260212123126.png",
-    "SimpRead/【UE5】预测脚步 IK 实现 - PredictFootIK.md",
-    "SimpRead/【UE5】关于预测 IK 的个人思考与小 Trick.md",
-    "SimpRead/游戏中上下楼梯的解决方案 —  基于预测的 FootIK 方案.md",
-    "SimpRead/《刺客信条》基于预测的 FootIK 方案分析与 UE4 实现.md",
-    "SimpRead/UE4 实现基于预测的 FootIK.md",
-    "Util/Markdown快捷键.md",
-    "Interview/面试准备.md",
-    "SimpRead/simpread-UE4 实现基于预测的 FootIK.md",
-    "SimpRead/simpread-UE5 动画技术详解 - FootPlacement.md",
-    "《刺客信条》基于预测的 FootIK 方案分析与 UE4 实现 1.md",
-    "《刺客信条》基于预测的 FootIK 方案分析与 UE4 实现.md",
-    "simpread-UE4 实现基于预测的 FootIK.md",
-    "SimpRead",
-    "images/Pasted image 20260204110613.png",
-    "AIChatTemp.md",
-    "Pasted image 20260204110040.png",
-    "未命名.base",
-    "2026-02-04.md"
+    "Project/My Single-player Games in Life/文本数据/重力异想世界 重制版.md",
+    "Project/My Single-player Games in Life/文本数据/神秘海域 2：纵横四海.md",
+    "Project/My Single-player Games in Life/文本数据/古墓丽影9.md",
+    "Project/My Single-player Games in Life/文本数据/战神 3 重制版.md",
+    "Project/My Single-player Games in Life/文本数据/宇宙机器人.md",
+    "Project/My Single-player Games in Life/文本数据/俄罗斯方块效应：连接.md",
+    "Project/My Single-player Games in Life/文本数据/忍者龙剑传4.md",
+    "Project/My Single-player Games in Life/文本数据/底特律：变人.md",
+    "Project/My Single-player Games in Life/文本数据/地铁：离去.md",
+    "Project/My Single-player Games in Life/文本数据/小丑牌.md",
+    "Project/My Single-player Games in Life/文本数据/双影奇境.md",
+    "Project/My Single-player Games in Life/文本数据/最后生还者2：重制版.md",
+    "Project/My Single-player Games in Life/文本数据/最终幻想VII 重制版.md",
+    "Project/My Single-player Games in Life/文本数据/地平线：西之绝境.md",
+    "Project/My Single-player Games in Life/文本数据/空之轨迹the 1st.md",
+    "Project/My Single-player Games in Life/文本数据/战神：诸神黄昏.md",
+    "Project/My Single-player Games in Life/文本数据/战神.md",
+    "Project/My Single-player Games in Life/我通关的单机游戏.md",
+    "Project/My Single-player Games in Life/文本数据/INSIDE.md",
+    "Project/My Single-player Games in Life/文本数据/葬花·暗黑桃花源.md",
+    "Project/My Single-player Games in Life/文本数据/茶杯头.md",
+    "Project/My Single-player Games in Life/文本数据/勇者斗恶龙XI 寻觅逝去的时光.md",
+    "Templates/游戏记录.md",
+    "Project/My Single-player Games in Life/文本数据/血源诅咒.md",
+    "Project/My Single-player Games in Life/文本数据/尼尔：自动人形.md",
+    "未命名.md",
+    "Project/My Single-player Games in Life/封面数据/马里奥兄弟：惊奇.png",
+    "Project/My Single-player Games in Life/封面数据/夺宝奇兵：古老之圈.jpg",
+    "Project/My Single-player Games in Life/封面数据/圣兽之王.jpg",
+    "Project/My Single-player Games in Life/封面数据/忍者龙剑传4.jpg",
+    "Project/My Single-player Games in Life/封面数据/巫师之昆特牌：王权的陨落.jpg",
+    "Project/My Single-player Games in Life/封面数据/光与影：33 号远征队.WEBP",
+    "Project/My Single-player Games in Life/封面数据/使命召唤：现代战争重制版.jpg",
+    "Project/My Single-player Games in Life/封面数据/超英派遣中心.jpg",
+    "Project/My Single-player Games in Life/封面数据/羊蹄山之魂.WEBP",
+    "Project/My Single-player Games in Life/封面数据/小丑牌.JPG",
+    "Project/My Single-player Games in Life/封面数据/战神 诸神黄昏：英灵殿.jpg.crdownload",
+    "Project/My Single-player Games in Life/文本数据/未命名",
+    "Project/My Single-player Games in Life/封面数据/艾尔登法环：黄金树幽影.jpg.crdownload",
+    "Project/My Single-player Games in Life/封面数据/神秘海域4：盗贼末路.jpg.crdownload",
+    "Project/My Single-player Games in Life/封面数据/隐形守护者.jpeg.crdownload",
+    "Project/My Single-player Games in Life/封面数据/茶杯头.jpg.crdownload",
+    "Project/My Single-player Games in Life/封面数据/双人成行.jpg.crdownload",
+    "Project/My Single-player Games in Life/封面数据/刺客信条IV：黑旗.jpg.crdownload",
+    "Templates",
+    "未命名.canvas",
+    "Project/My Single-player Games in Life/docs/未命名"
   ]
 }
